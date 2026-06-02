@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Directory e file di runtime locali (Devono essere ricreati sul PC dell'utente)
+tools/
+logs/
+data/
+downloads/
+
+# PyInstaller e Build
+build/
+dist/
+*.spec
+*.exe
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
