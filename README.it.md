@@ -8,18 +8,28 @@ Il programma gestisce autonomamente il download e l'aggiornamento dei componenti
 
 ---
 
-## Requisiti
+## ⬇️ Download (consigliato)
 
-*   **Windows 10/11** (l'app si appoggia alle API di Windows e a binari di supporto `.exe`).
-*   **Connessione a internet al primo avvio**, per scaricare automaticamente `yt-dlp` e `FFmpeg`.
-*   **Python 3.10 o superiore** — *solo se esegui dal codice sorgente*. Ricordati di spuntare *"Add Python to PATH"* durante l'installazione.
+Il modo più semplice per usare l'app — **niente Python, niente setup**:
 
-> [!TIP]
-> Non serve nessuna installazione di Python se usi l'eseguibile standalone **`VideoDownloader.exe`**: scaricalo dalla [pagina Releases](https://github.com/nispa/videoDownloader/releases) (o compilalo tu stesso, vedi sotto) e fai semplicemente doppio clic.
+1. Scarica **`VideoDownloader.exe`** dalla [pagina Releases](https://github.com/nispa/videoDownloader/releases).
+2. Mettilo in una cartella a tua scelta e fai doppio clic. Fine.
+
+Al primo avvio l'app scarica automaticamente gli strumenti di supporto (`yt-dlp` e `FFmpeg`) e crea le sue cartelle di lavoro accanto all'eseguibile, quindi la prima volta serve una connessione a internet.
+
+L'unico requisito è **Windows 10/11**.
 
 ---
 
-## ⚡ Setup Rapido e Gestione (Windows Batch)
+## 🛠️ Esecuzione da Sorgente / Compilazione in Proprio (opzionale)
+
+Se preferisci eseguire direttamente il codice Python, o compilare `VideoDownloader.exe` per conto tuo, ti serviranno:
+
+*   **Windows 10/11**
+*   **Python 3.10 o superiore**, con *"Add Python to PATH"* spuntato durante l'installazione
+*   **Una connessione a internet** per il setup iniziale
+
+### ⚡ Setup Rapido e Gestione (Windows Batch)
 
 Per semplificare l'installazione e l'uso, il progetto include due script batch pronti all'uso nella root:
 
