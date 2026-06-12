@@ -15,7 +15,7 @@ Il modo più semplice per usare l'app — **niente Python, niente setup**:
 1. Scarica **`VideoDownloader.exe`** dalla [pagina Releases](https://github.com/nispa/videoDownloader/releases).
 2. Mettilo in una cartella a tua scelta e fai doppio clic. Fine.
 
-Al primo avvio l'app scarica automaticamente gli strumenti di supporto (`yt-dlp` e `FFmpeg`) e crea le sue cartelle di lavoro accanto all'eseguibile, quindi la prima volta serve una connessione a internet.
+Al primo avvio l'app scarica automaticamente gli strumenti di supporto (`yt-dlp` e `FFmpeg`) e crea le sue cartelle di lavoro accanto all'eseguibile.
 
 L'unico requisito è **Windows 10/11**.
 
@@ -27,7 +27,6 @@ Se preferisci eseguire direttamente il codice Python, o compilare `VideoDownload
 
 *   **Windows 10/11**
 *   **Python 3.10 o superiore**, con *"Add Python to PATH"* spuntato durante l'installazione
-*   **Una connessione a internet** per il setup iniziale
 
 ### ⚡ Setup Rapido e Gestione (Windows Batch)
 
