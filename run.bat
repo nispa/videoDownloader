@@ -1,4 +1,6 @@
 @echo off
+:: NOTE: keep this file pure ASCII (no accented letters!). With chcp 65001
+:: active, multi-byte characters desync the cmd batch parser.
 chcp 65001 >nul
 
 :menu
@@ -7,15 +9,15 @@ echo =======================================================
 echo            Video ^& Audio Downloader Menu
 echo =======================================================
 echo.
-echo  1. Avvia Interfaccia Grafica (GUI) - Consigliato
-echo  2. Avvia Riga di Comando (CLI)
-echo  3. Compila in Eseguibile (VideoDownloader.exe)
-echo  4. Esegui / Ripristina Setup Completo
-echo  5. Esci
+echo  1. Start Graphical Interface (GUI) - Recommended
+echo  2. Start Command Line Interface (CLI)
+echo  3. Build Executable (VideoDownloader.exe)
+echo  4. Run / Repair Full Setup
+echo  5. Exit
 echo.
 echo =======================================================
 set choice=
-set /p choice="Seleziona un'opzione (1-5): "
+set /p choice="Select an option (1-5): "
 
 if "%choice%"=="1" goto run_gui
 if "%choice%"=="2" goto run_cli
@@ -26,9 +28,9 @@ goto menu
 
 :run_gui
 cls
-echo [+] Avvio dell'Interfaccia Grafica in corso...
+echo [+] Starting the Graphical Interface...
 if not exist ".venv" (
-    echo [AVVISO] Ambiente virtuale non trovato. Avvio setup automatico...
+    echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )
 call .venv\Scripts\python src/gui.py
@@ -37,9 +39,9 @@ goto menu
 
 :run_cli
 cls
-echo [+] Avvio dell'Interfaccia a Riga di Comando in corso...
+echo [+] Starting the Command Line Interface...
 if not exist ".venv" (
-    echo [AVVISO] Ambiente virtuale non trovato. Avvio setup automatico...
+    echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )
 call .venv\Scripts\python src/main.py
@@ -48,9 +50,9 @@ goto menu
 
 :compile
 cls
-echo [+] Compilazione dell'applicazione standalone in corso...
+echo [+] Building the standalone application...
 if not exist ".venv" (
-    echo [AVVISO] Ambiente virtuale non trovato. Avvio setup automatico...
+    echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )
 call .venv\Scripts\python build_exe.py
@@ -59,12 +61,12 @@ goto menu
 
 :run_setup
 cls
-echo [+] Esecuzione del Setup in corso...
+echo [+] Running Setup...
 call setup.bat
 goto menu
 
 :exit
 cls
-echo Grazie per aver utilizzato Video ^& Audio Downloader!
+echo Thanks for using Video ^& Audio Downloader!
 timeout /t 3 >nul
 exit

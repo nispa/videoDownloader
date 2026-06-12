@@ -3,21 +3,21 @@ import sys
 import time
 from colorama import init, Fore, Style
 
-# Importa i moduli locali
+# Local modules
 import database
 import bootstrapper
 from clipboard import get_clipboard_url
 from downloader import VideoDownloader
 
-# Inizializza colorama per Windows
+# Initialize colorama for Windows
 init(autoreset=True)
 
 def print_banner():
-    """Stampa un bellissimo banner colorato per l'applicazione."""
+    """Print a colorful banner for the application."""
     os.system('cls' if os.name == 'nt' else 'clear')
     banner = f"""
 {Fore.CYAN}{Style.BRIGHT}=======================================================
-{Fore.YELLOW}{Style.BRIGHT}         VIDEO & AUDIO DOWNLOADER (yt-dlp)             
+{Fore.YELLOW}{Style.BRIGHT}         VIDEO & AUDIO DOWNLOADER (yt-dlp)
 {Fore.CYAN}{Style.BRIGHT}=======================================================
 {Fore.GREEN}Strumenti Locali: {Fore.WHITE}Gestiti in ./tools/
 {Fore.GREEN}Database:         {Fore.WHITE}data/downloader.db
@@ -27,50 +27,50 @@ def print_banner():
     print(banner)
 
 def get_progress_callback():
-    """Ritorna una funzione di callback per visualizzare la barra di avanzamento a riga di comando."""
+    """Return a callback function that renders a command-line progress bar."""
     last_percent = -1
-    
+
     def callback(percentage: float, speed: str, eta: str, status: str):
         nonlocal last_percent
-        # Limita gli aggiornamenti se il valore non cambia significativamente, tranne per post-processing
+        # Skip updates when the value barely changes, except during post-processing
         if percentage == last_percent and "Post-Processing" not in status and percentage < 100:
             return
         last_percent = percentage
-        
+
         width = 30
         filled = int(width * percentage / 100)
-        
-        # Gestisce la barra
+
+        # Render the bar
         if percentage >= 100:
             bar_color = Fore.GREEN
             bar_str = "=" * width
         else:
             bar_color = Fore.YELLOW
-            # Evita stringhe vuote o sfasamenti del carattere '>'
+            # Avoid empty strings or misplacing the '>' character
             if filled > 0:
                 bar_str = "=" * (filled - 1) + ">" + " " * (width - filled)
             else:
                 bar_str = ">" + " " * (width - 1)
-                
-        # Cancella la riga corrente e scrive
+
+        # Clear the current line and write
         sys.stdout.write(f"\r\033[K{bar_color}[{bar_str}] {Fore.CYAN}{percentage:5.1f}% {Fore.WHITE}| {Fore.YELLOW}{speed:<10s} {Fore.WHITE}| ETA: {Fore.GREEN}{eta:<6s} {Fore.WHITE}| {Fore.MAGENTA}{status}")
         sys.stdout.flush()
-        
+
         if percentage >= 100 and (status == "Completato" or "Errore" in status):
             sys.stdout.write("\n")
             sys.stdout.flush()
-            
+
     return callback
 
 def download_menu(downloader: VideoDownloader):
-    """Gestisce il flusso di download di un video."""
+    """Handle the download flow for a single video."""
     print_banner()
     print(f"{Fore.CYAN}[Menu Download]")
-    
-    # 1. Rileva link negli appunti
+
+    # 1. Detect a link in the clipboard
     clipboard_url = get_clipboard_url()
     url = None
-    
+
     if clipboard_url:
         print(f"\n{Fore.GREEN}⚡ Rilevato link negli appunti:{Fore.WHITE} {clipboard_url}")
         choice = input(f"{Fore.YELLOW}Premi INVIO per usare questo link, oppure scrivi/incolla un altro link:\n{Fore.CYAN}> {Style.RESET_ALL}").strip()
@@ -80,35 +80,35 @@ def download_menu(downloader: VideoDownloader):
             url = choice
     else:
         url = input(f"\n{Fore.YELLOW}Incolla il link del video da scaricare:\n{Fore.CYAN}> {Style.RESET_ALL}").strip()
-        
+
     if not url:
         print(f"\n{Fore.RED}Errore: Nessun link fornito. Ritorno al menu principale...")
         time.sleep(2)
         return
 
-    # 2. Estrazione informazioni
+    # 2. Extract the video info
     print(f"\n{Fore.CYAN}Recupero informazioni sul video in corso...")
     info = downloader.get_info(url)
-    
+
     if not info:
         print(f"\n{Fore.RED}Errore: Impossibile estrarre informazioni dal link. Verifica la connessione o il link.")
         input(f"\n{Fore.WHITE}Premi Invio per continuare...")
         return
-        
+
     print(f"\n{Fore.GREEN}Dettagli Trovati:")
     print(f" {Fore.YELLOW}Titolo:     {Fore.WHITE}{info['title']}")
     print(f" {Fore.YELLOW}Autore:     {Fore.WHITE}{info['uploader']}")
     print(f" {Fore.YELLOW}Durata:     {Fore.WHITE}{info['duration']}")
     print(f" {Fore.YELLOW}Piattaforma:{Fore.WHITE}{info['extractor']}")
-    
-    # 3. Scelta formato
+
+    # 3. Format choice
     print(f"\n{Fore.CYAN}Scegli formato di download:")
     print(f" {Fore.WHITE}1) {Fore.GREEN}Video {Fore.WHITE}(Migliore risoluzione mp4)")
     print(f" {Fore.WHITE}2) {Fore.GREEN}Audio {Fore.WHITE}(Estrazione MP3 alta qualità)")
     print(f" {Fore.WHITE}3) Annulla")
-    
+
     format_choice = input(f"\n{Fore.YELLOW}Seleziona un'opzione [1-3]: {Fore.CYAN}").strip()
-    
+
     if format_choice == "1":
         mode = "video"
     elif format_choice == "2":
@@ -117,32 +117,32 @@ def download_menu(downloader: VideoDownloader):
         print(f"\n{Fore.YELLOW}Operazione annullata.")
         time.sleep(1)
         return
-        
-    # 4. Esecuzione download
+
+    # 4. Run the download
     print(f"\n{Fore.CYAN}Avvio download in corso... (Salvataggio in: {downloader.get_download_path()})")
-    
+
     progress_cb = get_progress_callback()
-    
+
     success = downloader.download(url, mode=mode, progress_callback=progress_cb)
-    
+
     if success:
         print(f"\n{Fore.GREEN}🎉 File scaricato correttamente!")
     else:
         print(f"\n{Fore.RED}❌ Download fallito. Controlla logs/app.log per maggiori informazioni.")
-        
+
     input(f"\n{Fore.WHITE}Premi Invio per tornare al menu...")
 
 def settings_menu(downloader: VideoDownloader):
-    """Gestisce il menu delle impostazioni (cartella di download)."""
+    """Handle the settings menu (download directory)."""
     print_banner()
     print(f"{Fore.CYAN}[Menu Impostazioni]")
     current_path = downloader.get_download_path()
     print(f"\nCartella di download attuale: {Fore.YELLOW}{current_path}")
-    
+
     new_path = input(f"\n{Fore.WHITE}Inserisci il nuovo percorso assoluto per i download (oppure premi Invio per annullare):\n{Fore.CYAN}> {Style.RESET_ALL}").strip()
-    
+
     if new_path:
-        # Pulisce eventuali virgolette aggiunte trascinando la cartella
+        # Strip quotes that may be added when dragging a folder into the terminal
         new_path = new_path.strip('"').strip("'")
         try:
             os.makedirs(new_path, exist_ok=True)
@@ -152,33 +152,33 @@ def settings_menu(downloader: VideoDownloader):
             print(f"\n{Fore.RED}Errore: Impossibile creare o accedere alla cartella inserita: {e}")
     else:
         print(f"\n{Fore.YELLOW}Operazione annullata.")
-        
+
     time.sleep(2)
 
 def main():
-    # 1. Esegui il bootstrapper per garantire la presenza di yt-dlp e ffmpeg
+    # 1. Run the bootstrapper to make sure yt-dlp and ffmpeg are available
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f"{Fore.CYAN}=== Avvio in corso ===")
     print(f"{Fore.WHITE}Verifica dipendenze in corso (yt-dlp, ffmpeg)...")
-    
+
     if not bootstrapper.run_bootstrap():
         print(f"\n{Fore.RED}Errore critico: Impossibile configurare gli strumenti di download.")
         print("Verifica la connessione ad internet e riprova.")
         input("\nPremi Invio per uscire...")
         sys.exit(1)
-        
-    # Inizializza downloader
+
+    # Initialize the downloader
     downloader = VideoDownloader()
-    
-    # 2. Loop principale dell'applicazione
+
+    # 2. Main application loop
     while True:
         print_banner()
         print(f" {Fore.WHITE}1) {Fore.GREEN}Scarica Video / Audio da Link")
         print(f" {Fore.WHITE}2) {Fore.GREEN}Configura cartella di download")
         print(f" {Fore.WHITE}3) {Fore.RED}Esci")
-        
+
         choice = input(f"\n{Fore.YELLOW}Seleziona un'opzione [1-3]: {Fore.CYAN}").strip()
-        
+
         if choice == "1":
             download_menu(downloader)
         elif choice == "2":

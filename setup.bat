@@ -1,68 +1,69 @@
 @echo off
-:: Impedisce la visualizzazione dei singoli comandi nel terminale per mantenere l'output pulito
+:: Hide individual commands to keep the output clean.
+:: NOTE: keep this file pure ASCII (no accented letters!). With chcp 65001
+:: active, multi-byte characters desync the cmd batch parser.
 chcp 65001 >nul
-:: Imposta la codifica UTF-8 per supportare le emoji nel terminale di Windows
 
 echo =======================================================
 echo        Video ^& Audio Downloader - SETUP
 echo =======================================================
 echo.
 
-:: 1. Verifica la presenza di Python
+:: 1. Check that Python is available
 where python >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERRORE] Python non è stato trovato nel sistema!
-    echo Per favore, installa Python (versione 3.8 o superiore)
-    echo e assicurati di spuntare l'opzione "Add Python to PATH" durante l'installazione.
+    echo [ERROR] Python was not found on this system!
+    echo Please install Python ^(version 3.8 or later^)
+    echo and make sure to check "Add Python to PATH" during the installation.
     echo.
     pause
     exit /b 1
 )
 
-echo [+] Python rilevato nel sistema.
+echo [+] Python detected.
 echo.
 
-:: 2. Creazione dell'ambiente virtuale .venv se non esiste
+:: 2. Create the .venv virtual environment if it does not exist
 if not exist ".venv" (
-    echo [+] Creazione dell'ambiente virtuale (.venv) in corso...
+    echo [+] Creating the virtual environment ^(.venv^)...
     python -m venv .venv
     if %errorlevel% neq 0 (
-        echo [ERRORE] Impossibile creare l'ambiente virtuale.
+        echo [ERROR] Could not create the virtual environment.
         pause
         exit /b 1
     )
-    echo [+] Ambiente virtuale creato con successo.
+    echo [+] Virtual environment created successfully.
 ) else (
-    echo [+] Ambiente virtuale (.venv) già presente.
+    echo [+] Virtual environment ^(.venv^) already present.
 )
 echo.
 
-:: 3. Aggiornamento pip e installazione delle dipendenze
-echo [+] Aggiornamento di pip e installazione delle dipendenze in corso...
+:: 3. Upgrade pip and install the dependencies
+echo [+] Upgrading pip and installing dependencies...
 call .venv\Scripts\python -m pip install --upgrade pip
 call .venv\Scripts\pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ERRORE] Si è verificato un errore durante l'installazione delle dipendenze.
+    echo [ERROR] An error occurred while installing the dependencies.
     pause
     exit /b 1
 )
-echo [+] Dipendenze installate con successo.
+echo [+] Dependencies installed successfully.
 echo.
 
-:: 4. Download/Bootstrap dei tool (yt-dlp e ffmpeg)
-echo [+] Download e aggiornamento dei tool di supporto (yt-dlp, FFmpeg)...
+:: 4. Download/bootstrap the support tools (yt-dlp and ffmpeg)
+echo [+] Downloading and updating the support tools ^(yt-dlp, FFmpeg^)...
 call .venv\Scripts\python src/bootstrapper.py
 if %errorlevel% neq 0 (
-    echo [ERRORE] Si è verificato un errore durante l'inizializzazione dei tool di supporto.
+    echo [ERROR] An error occurred while initializing the support tools.
     pause
     exit /b 1
 )
-echo [+] Configurazione dei tool completata.
+echo [+] Tools configured successfully.
 echo.
 
 echo =======================================================
-echo  Setup completato con successo! Tutto è pronto all'uso.
-echo  Puoi avviare l'applicazione usando 'run.bat'.
+echo  Setup completed successfully! Everything is ready.
+echo  You can start the application with 'run.bat'.
 echo =======================================================
 echo.
 pause

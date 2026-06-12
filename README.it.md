@@ -34,12 +34,14 @@ c:\lavori\video-downloader\
 ├── data/                   # Database SQLite (downloader.db)
 ├── logs/                   # Cartella dei log (app.log e download.log)
 ├── downloads/              # Cartella di download predefinita
+├── lang/                   # Traduzioni della UI (it.json, en.json, lingue aggiunte dall'utente)
 ├── src/                    # Codice sorgente Python
 │   ├── gui.py              # Interfaccia Grafica (GUI CustomTkinter)
 │   ├── main.py             # Interfaccia a riga di comando (CLI)
 │   ├── downloader.py       # Gestione del download ed estrazione metadati
 │   ├── bootstrapper.py     # Download e auto-aggiornamento dei tool
 │   ├── database.py         # Configurazione DB SQLite e percorsi dinamici
+│   ├── i18n.py             # Localizzazione della UI (carica le label da lang/*.json)
 │   └── clipboard.py        # Integrazione delle API per gli appunti di Windows
 ├── VideoDownloader.exe     # Applicazione compilata standalone (root)
 ├── build_exe.py            # Script di compilazione con PyInstaller
@@ -64,6 +66,19 @@ L'interfaccia grafica moderna è costruita con `customtkinter` in modalità scur
 *   **Analisi in Background**: Non appena inserisci un link valido, l'app avvia un'estrazione metadati mostrando Titolo, Canale autore e Durata.
 *   **Verifica Preventiva degli URL**: Se inserisci un link non supportato, l'app ti avvisa istantaneamente a schermo prima ancora di provare a scaricarlo, interrogando la lista interna di oltre 1.480 estrattori caricata nel database.
 *   **Sfoglia Destinazione**: Puoi cambiare la cartella di salvataggio predefinita con un comodo selettore grafico. La scelta viene salvata nel database e mantenuta per i successivi avvii.
+*   **Autenticazione tramite Cookie (Facebook/Instagram)**: Molte piattaforme social richiedono il login per accedere ai video, Reel inclusi. Seleziona dal menu *Browser per cookie* il browser in cui sei già loggato, oppure scegli un file `cookies.txt` esportato (che ha priorità sul browser).
+*   **Interfaccia Multilingua**: Cambia lingua dal menu a tendina in alto a destra (italiano e inglese inclusi). La scelta viene salvata e ripristinata all'avvio successivo.
+
+### Note sui download da Facebook / Instagram
+
+yt-dlp legge i cookie direttamente dal profilo del browser su disco:
+
+*   **Firefox** funziona subito, anche con il browser aperto.
+*   **Chrome/Edge**: il database dei cookie è bloccato mentre il browser è in esecuzione, quindi chiudilo completamente prima di scaricare. Le versioni recenti di Chrome (127+) cifrano i cookie con la App-Bound Encryption e potrebbero non funzionare affatto; in tal caso esporta un file `cookies.txt` con un'estensione del browser (es. *Get cookies.txt LOCALLY*) e selezionalo nella GUI.
+
+### Aggiungere una nuova lingua
+
+Le label della UI sono in file JSON nella cartella `lang/` (ricreata automaticamente se mancante). Per aggiungere una lingua, copia `en.json`, rinominalo (es. `fr.json`), traduci i valori e imposta il campo `_name`: comparirà automaticamente nel menu delle lingue.
 
 ---
 

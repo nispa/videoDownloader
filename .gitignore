@@ -25,6 +25,8 @@ dist/
 # IDE / Editor
 .vscode/
 .idea/
+.claude/
+.cline/
 *.suo
 *.ntvs*
 *.njsproj

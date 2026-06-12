@@ -2,12 +2,12 @@ import sqlite3
 import os
 import sys
 
-# Rilevamento dinamico di BASE_DIR per gestire script vs exe
+# Dynamic BASE_DIR detection to handle script vs frozen exe
 if getattr(sys, 'frozen', False):
-    # Eseguito come EXE compilato (nella radice del progetto)
+    # Running as a compiled EXE (located in the project root)
     BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    # Eseguito come script Python (all'interno di src/)
+    # Running as a Python script (located inside src/)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DB_DIR = os.path.abspath(os.path.join(BASE_DIR, "data"))
@@ -15,12 +15,12 @@ DB_PATH = os.path.join(DB_DIR, "downloader.db")
 DEFAULT_DOWNLOAD_DIR = os.path.abspath(os.path.join(BASE_DIR, "downloads"))
 
 def init_db():
-    """Inizializza il database SQLite creando le tabelle e inserendo i valori predefiniti."""
+    """Initialize the SQLite database, creating tables and inserting default values."""
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    # Tabella per tracciare le versioni degli strumenti di terze parti
+
+    # Table tracking the versions of third-party tools
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_tools (
             tool_name TEXT PRIMARY KEY,
@@ -28,25 +28,25 @@ def init_db():
             last_checked TEXT
         )
     """)
-    
-    # Tabella per tracciare le impostazioni dell'applicazione (es. percorso di download)
+
+    # Table tracking application settings (e.g. download path)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     """)
-    
-    # Tabella per memorizzare gli estrattori supportati da yt-dlp
+
+    # Table storing the extractors supported by yt-dlp
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS extractors (
             extractor_name TEXT PRIMARY KEY
         )
     """)
-    
+
     conn.commit()
-    
-    # Imposta il percorso di download predefinito se non è già presente
+
+    # Set the default download path if not already present
     cursor.execute("SELECT value FROM settings WHERE key = 'download_path'")
     if not cursor.fetchone():
         os.makedirs(DEFAULT_DOWNLOAD_DIR, exist_ok=True)
@@ -55,11 +55,19 @@ def init_db():
             (DEFAULT_DOWNLOAD_DIR,)
         )
         conn.commit()
-        
+
+    # Set the default cookie browser (none) if not already present
+    cursor.execute("SELECT value FROM settings WHERE key = 'cookie_browser'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO settings (key, value) VALUES ('cookie_browser', 'none')"
+        )
+        conn.commit()
+
     conn.close()
 
 def get_tool_version(tool_name: str) -> str | None:
-    """Restituisce la versione installata del tool, o None se non è registrato."""
+    """Return the installed version of the tool, or None if not registered."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT installed_version FROM system_tools WHERE tool_name = ?", (tool_name,))
@@ -68,7 +76,7 @@ def get_tool_version(tool_name: str) -> str | None:
     return row[0] if row else None
 
 def update_tool_version(tool_name: str, version: str):
-    """Aggiorna o inserisce la versione del tool con il timestamp corrente."""
+    """Insert or update the tool version with the current timestamp."""
     import datetime
     now = datetime.datetime.now().isoformat()
     conn = sqlite3.connect(DB_PATH)
@@ -84,7 +92,7 @@ def update_tool_version(tool_name: str, version: str):
     conn.close()
 
 def get_setting(key: str, default_value: str = None) -> str | None:
-    """Restituisce il valore di un'impostazione, o il valore di default."""
+    """Return the value of a setting, or the default value."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
@@ -93,7 +101,7 @@ def get_setting(key: str, default_value: str = None) -> str | None:
     return row[0] if row else default_value
 
 def set_setting(key: str, value: str):
-    """Salva o aggiorna un'impostazione."""
+    """Save or update a setting."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -105,7 +113,7 @@ def set_setting(key: str, value: str):
     conn.close()
 
 def save_extractors(extractor_names: list[str]):
-    """Salva la lista di estrattori supportati da yt-dlp nel DB, pulendo quelli vecchi."""
+    """Save the list of extractors supported by yt-dlp, clearing the old ones."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM extractors")
@@ -117,7 +125,7 @@ def save_extractors(extractor_names: list[str]):
     conn.close()
 
 def get_extractors() -> set[str]:
-    """Restituisce il set degli estrattori salvati nel database."""
+    """Return the set of extractors stored in the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT extractor_name FROM extractors")
@@ -125,5 +133,5 @@ def get_extractors() -> set[str]:
     conn.close()
     return {row[0] for row in rows}
 
-# Inizializza automaticamente il DB al caricamento del modulo
+# Automatically initialize the DB when the module is loaded
 init_db()

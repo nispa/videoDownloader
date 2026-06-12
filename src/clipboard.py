@@ -2,11 +2,11 @@ import ctypes
 from ctypes import wintypes
 import re
 
-# Carica user32 e kernel32
+# Load user32 and kernel32
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
-# Definisci le funzioni Windows API per gli appunti
+# Define the Windows API functions for the clipboard
 OpenClipboard = user32.OpenClipboard
 OpenClipboard.argtypes = [wintypes.HWND]
 OpenClipboard.restype = wintypes.BOOL
@@ -26,31 +26,31 @@ GlobalUnlock = kernel32.GlobalUnlock
 GlobalUnlock.argtypes = [wintypes.HANDLE]
 GlobalUnlock.restype = wintypes.BOOL
 
-# Formato per il testo unicode
+# Clipboard format for unicode text
 CF_UNICODETEXT = 13
 
-# Regex semplice per validare URL generici
+# Simple regex to validate generic URLs
 URL_REGEX = re.compile(r'^https?://[^\s/$.?#].[^\s]*$', re.IGNORECASE)
 
 def get_clipboard_text() -> str:
     """
-    Legge il testo memorizzato negli appunti di Windows.
-    Ritorna una stringa vuota se gli appunti non contengono testo o se si verifica un errore.
+    Read the text stored in the Windows clipboard.
+    Returns an empty string if the clipboard has no text or an error occurs.
     """
     if not OpenClipboard(None):
         return ""
-    
+
     try:
         handle = GetClipboardData(CF_UNICODETEXT)
         if not handle:
             return ""
-        
+
         ptr = GlobalLock(handle)
         if not ptr:
             return ""
-            
+
         try:
-            # Converte il puntatore in stringa Python (wchar_p per Unicode)
+            # Convert the pointer to a Python string (wchar_p for Unicode)
             text = ctypes.c_wchar_p(ptr).value
             return text if text else ""
         finally:
@@ -62,22 +62,22 @@ def get_clipboard_text() -> str:
 
 def get_clipboard_url() -> str | None:
     """
-    Verifica se negli appunti c'è un URL valido.
-    Ritorna l'URL pulito (senza spazi bianchi) se valido, altrimenti None.
+    Check whether the clipboard contains a valid URL.
+    Returns the cleaned URL (no surrounding whitespace) if valid, None otherwise.
     """
     text = get_clipboard_text().strip()
     if not text:
         return None
-    
-    # Verifica se corrisponde a un URL
+
+    # Check whether it matches a URL
     if URL_REGEX.match(text):
         return text
     return None
 
 if __name__ == "__main__":
-    # Test veloce del modulo
+    # Quick module test
     url = get_clipboard_url()
     if url:
-        print(f"Trovato URL negli appunti: {url}")
+        print(f"Found URL in clipboard: {url}")
     else:
-        print("Nessun URL trovato negli appunti.")
+        print("No URL found in clipboard.")

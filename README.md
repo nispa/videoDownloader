@@ -34,12 +34,14 @@ c:\lavori\video-downloader\
 ├── data/                   # SQLite database (downloader.db)
 ├── logs/                   # Log folder (app.log and download.log)
 ├── downloads/              # Default downloads directory
+├── lang/                   # UI translations (it.json, en.json, user-added languages)
 ├── src/                    # Python source code
 │   ├── gui.py              # Graphical User Interface (GUI using CustomTkinter)
 │   ├── main.py             # Command Line Interface (CLI)
 │   ├── downloader.py       # Download engine and metadata extraction
 │   ├── bootstrapper.py     # Tool manager and auto-updater
 │   ├── database.py         # SQLite DB config and dynamic path helper
+│   ├── i18n.py             # UI localization (loads labels from lang/*.json)
 │   └── clipboard.py        # Windows Clipboard API integration
 ├── VideoDownloader.exe     # Compiled standalone application (root)
 ├── build_exe.py            # Compilation script using PyInstaller
@@ -64,6 +66,19 @@ The desktop graphical interface is built with `customtkinter` with an elegant, r
 *   **Background Metadata Extraction**: When you input a supported URL, the app extracts metadata in a background thread to show the Title, Uploader, and Duration before you start the download.
 *   **Instant URL Validation**: If you input an unsupported URL, the app alerts you immediately without launching background subprocesses, checking against a local SQLite table containing over 1,480 supported extractors.
 *   **Custom Downloads Folder**: Change your downloads directory using a native file explorer. Your choice is saved in the SQLite database and remembered across sessions.
+*   **Cookie Authentication (Facebook/Instagram)**: Many social platforms require a login to access videos, Reels included. Pick the browser where you are already logged in from the *Cookie browser* dropdown, or select an exported `cookies.txt` file (which takes priority over the browser).
+*   **Multi-language UI**: Switch language from the dropdown in the top-right corner (Italian and English included). The selection is saved and restored on the next start.
+
+### Notes on Facebook / Instagram downloads
+
+yt-dlp reads the cookies directly from your browser profile on disk:
+
+*   **Firefox** works out of the box, even while the browser is open.
+*   **Chrome/Edge**: the cookie database is locked while the browser is running, so close it completely before downloading. Recent Chrome versions (127+) encrypt cookies with App-Bound Encryption and may not work at all; in that case export a `cookies.txt` file with a browser extension (e.g. *Get cookies.txt LOCALLY*) and select it in the GUI.
+
+### Adding a new language
+
+UI labels live in JSON files inside the `lang/` folder (recreated automatically if missing). To add a language, copy `en.json`, rename it (e.g. `fr.json`), translate the values and set the `_name` field: it will appear automatically in the language dropdown.
 
 ---
 
