@@ -8,6 +8,17 @@ The program automatically handles the downloading and updating of third-party de
 
 ---
 
+## Requirements
+
+*   **Windows 10/11** (the app relies on Windows APIs and `.exe` support binaries).
+*   **An internet connection on first launch**, to download `yt-dlp` and `FFmpeg` automatically.
+*   **Python 3.10 or later** — *only if you run from source*. Make sure to check *"Add Python to PATH"* during the installation.
+
+> [!TIP]
+> No Python at all is needed if you use the standalone **`VideoDownloader.exe`**: grab it from the [Releases page](https://github.com/nispa/videoDownloader/releases) (or build it yourself, see below) and just double-click it.
+
+---
+
 ## ⚡ Quick Setup & Launcher (Windows Batch)
 
 To make installation and usage extremely simple, the project contains two ready-to-use batch scripts in the root folder:
@@ -55,6 +66,7 @@ c:\lavori\video-downloader\
 The desktop graphical interface is built with `customtkinter` with an elegant, responsive dark theme. It handles processes asynchronously (multi-threading) to prevent the window from freezing during downloads.
 
 ### How to run it:
+- **From the launcher menu (easiest)**: Run **`run.bat`** and choose option **1**.
 - **Standalone executable**: Double-click **`VideoDownloader.exe`** in the project root.
 - **From source (Development)**: Run the following command in your terminal:
   ```powershell
@@ -87,10 +99,11 @@ UI labels live in JSON files inside the `lang/` folder (recreated automatically 
 If you prefer a keyboard-driven, minimal interface, you can run the interactive CLI script, which features colored terminal output.
 
 ### How to run it:
-Run the following command in your terminal:
-```powershell
-.venv\Scripts\python src/main.py
-```
+- **From the launcher menu (easiest)**: Run **`run.bat`** and choose option **2**.
+- **Manually**: Run the following command in your terminal:
+  ```powershell
+  .venv\Scripts\python src/main.py
+  ```
 
 ### CLI Features:
 *   **Clipboard Integration**: If a link is detected in the clipboard, you can press **ENTER** to select it immediately.
@@ -112,7 +125,7 @@ Logs are separated into two distinct files inside the `logs/` folder to make ins
 
 ## 4. How to Compile the App to EXE
 
-To bundle the Python scripts in `src/` into a single standalone `VideoDownloader.exe` in the root folder, make sure the application is closed and run:
+To bundle the Python scripts in `src/` into a single standalone `VideoDownloader.exe` in the root folder, make sure the application is closed, then run **`run.bat`** and choose option **3** — or run manually:
 
 ```powershell
 .venv\Scripts\python build_exe.py

@@ -8,6 +8,17 @@ Il programma gestisce autonomamente il download e l'aggiornamento dei componenti
 
 ---
 
+## Requisiti
+
+*   **Windows 10/11** (l'app si appoggia alle API di Windows e a binari di supporto `.exe`).
+*   **Connessione a internet al primo avvio**, per scaricare automaticamente `yt-dlp` e `FFmpeg`.
+*   **Python 3.10 o superiore** — *solo se esegui dal codice sorgente*. Ricordati di spuntare *"Add Python to PATH"* durante l'installazione.
+
+> [!TIP]
+> Non serve nessuna installazione di Python se usi l'eseguibile standalone **`VideoDownloader.exe`**: scaricalo dalla [pagina Releases](https://github.com/nispa/videoDownloader/releases) (o compilalo tu stesso, vedi sotto) e fai semplicemente doppio clic.
+
+---
+
 ## ⚡ Setup Rapido e Gestione (Windows Batch)
 
 Per semplificare l'installazione e l'uso, il progetto include due script batch pronti all'uso nella root:
@@ -55,6 +66,7 @@ c:\lavori\video-downloader\
 L'interfaccia grafica moderna è costruita con `customtkinter` in modalità scura automatica e supporta l'esecuzione asincrona (multi-thread) per evitare blocchi dell'interfaccia.
 
 ### Come avviarlo:
+- **Dal menu del launcher (più semplice)**: Avvia **`run.bat`** e scegli l'opzione **1**.
 - **Eseguibile standalone (Dalla root)**: Fai doppio clic su **`VideoDownloader.exe`**.
 - **Da sorgente (Sviluppo)**: Esegui nel terminale:
   ```powershell
@@ -87,10 +99,11 @@ Le label della UI sono in file JSON nella cartella `lang/` (ricreata automaticam
 Se preferisci un'interfaccia minimalista e rapida da tastiera, puoi utilizzare lo script CLI interattivo ed elegante con supporto per i colori nel terminale.
 
 ### Come avviarlo:
-Esegui nel terminale:
-```powershell
-.venv\Scripts\python src/main.py
-```
+- **Dal menu del launcher (più semplice)**: Avvia **`run.bat`** e scegli l'opzione **2**.
+- **Manualmente**: Esegui nel terminale:
+  ```powershell
+  .venv\Scripts\python src/main.py
+  ```
 
 ### Funzionalità della CLI:
 *   **Rilevamento Appunti**: All'avvio, se rileva un link negli appunti ti chiederà se vuoi scaricare direttamente quello premendo semplicemente **INVIO**.
@@ -112,7 +125,7 @@ Per facilitare il debug e l'ispezione, i log dell'applicazione sono divisi in du
 
 ## 4. Come Ricompilare l'Eseguibile
 
-Se apporti modifiche al codice sorgente in `src/` e desideri generare una nuova versione di `VideoDownloader.exe` nella radice del progetto, assicurati di chiudere il programma se è aperto ed esegui:
+Se apporti modifiche al codice sorgente in `src/` e desideri generare una nuova versione di `VideoDownloader.exe` nella radice del progetto, assicurati di chiudere il programma se è aperto, poi avvia **`run.bat`** e scegli l'opzione **3** — oppure esegui manualmente:
 
 ```powershell
 .venv\Scripts\python build_exe.py

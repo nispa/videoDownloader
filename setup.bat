@@ -13,7 +13,7 @@ echo.
 where python >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Python was not found on this system!
-    echo Please install Python ^(version 3.8 or later^)
+    echo Please install Python ^(version 3.10 or later^)
     echo and make sure to check "Add Python to PATH" during the installation.
     echo.
     pause
