@@ -11,6 +11,8 @@
   "info_author": "Channel/Author: {uploader}",
   "info_duration": "Duration: {duration}  |  Platform: {extractor}",
   "format_label": "Download format:",
+  "subs_checkbox": "Also download subtitles",
+  "subs_txt_checkbox": "Also as .txt (no timestamps)",
   "path_label": "Save folder:",
   "browse": "Browse",
   "cookie_browser_label": "Cookie browser (Facebook/Instagram):",

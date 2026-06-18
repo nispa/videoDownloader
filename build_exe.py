@@ -18,8 +18,14 @@ def main():
         "--onefile",
         "--name=VideoDownloader",
         "--paths=src",
-        "src/gui.py"
     ]
+
+    # Bundle the logo so the single-file exe shows it without external files.
+    # PyInstaller's --add-data separator is ';' on Windows.
+    if os.path.isfile("logo.png"):
+        cmd.append("--add-data=logo.png;.")
+
+    cmd.append("src/gui.py")
 
     print(f"Running command: {' '.join(cmd)}")
     result = subprocess.run(cmd)

@@ -63,6 +63,7 @@ c:\lavori\video-downloader\
 │   ├── database.py         # SQLite DB config and dynamic path helper
 │   ├── i18n.py             # UI localization (loads labels from lang/*.json)
 │   └── clipboard.py        # Windows Clipboard API integration
+├── logo.png                # App logo (window/taskbar icon and header)
 ├── VideoDownloader.exe     # Compiled standalone application (root)
 ├── build_exe.py            # Compilation script using PyInstaller
 └── requirements.txt        # Python dependencies
@@ -87,6 +88,7 @@ The desktop graphical interface is built with `customtkinter` with an elegant, r
 *   **Background Metadata Extraction**: When you input a supported URL, the app extracts metadata in a background thread to show the Title, Uploader, and Duration before you start the download.
 *   **Instant URL Validation**: If you input an unsupported URL, the app alerts you immediately without launching background subprocesses, checking against a local SQLite table containing over 1,480 supported extractors.
 *   **Custom Downloads Folder**: Change your downloads directory using a native file explorer. Your choice is saved in the SQLite database and remembered across sessions.
+*   **Subtitles / Transcript download (YouTube and others)**: Tick *Also download subtitles* to save the captions (both manual and auto-generated) as an `.srt` file alongside the video or audio. Pick **one language at a time** (Italian or English) from the dropdown next to it. With the extra *Also as .txt (no timestamps)* option, a clean plain-text transcript is also produced, stripped of timecodes and duplicated rolling lines. Subtitle fetching is **non-blocking**: if YouTube rate-limits the requests (`HTTP 429`), the video is still saved and the app reports *Completato (sottotitoli non riusciti)*. To reduce 429s, set the browser cookies and download one language at a time.
 *   **Cookie Authentication (Facebook/Instagram)**: Many social platforms require a login to access videos, Reels included. Pick the browser where you are already logged in from the *Cookie browser* dropdown, or select an exported `cookies.txt` file (which takes priority over the browser).
 *   **Multi-language UI**: Switch language from the dropdown in the top-right corner (Italian and English included). The selection is saved and restored on the next start.
 

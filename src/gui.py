@@ -1,8 +1,10 @@
 import os
 import sys
 import threading
+import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
+from PIL import Image
 
 # Add the parent directory to sys.path for imports when run as a script
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -31,12 +33,18 @@ class DownloaderApp(ctk.CTk):
         # Center the window on screen
         self.center_window()
 
+        # Set the window/taskbar icon from logo.png (next to the exe / project root)
+        self.set_window_icon()
+
         # Initialize the backend modules
         self.downloader = VideoDownloader()
 
         # State variables
         self.downloading = False
         self.download_mode = "video"  # "video" or "audio"
+        self.download_subs = ctk.BooleanVar(value=False)  # also fetch subtitles
+        self.subs_as_txt = ctk.BooleanVar(value=False)    # also save a clean .txt (no timestamps)
+        self.sub_lang_map = {"Italiano": "it", "English": "en"}
         self.analyzing = False
         self.info_state = "ready"  # ready | analyzing | unsupported | error | shown
 
@@ -49,6 +57,29 @@ class DownloaderApp(ctk.CTk):
 
         # Run the bootstrapper in the background to avoid blocking the UI at startup
         self.run_bootstrapper_async()
+
+    def logo_path(self) -> str:
+        """
+        Absolute path of the app logo. Prefer the copy bundled inside the PyInstaller
+        onefile build (sys._MEIPASS); otherwise fall back to logo.png next to the exe
+        / in the project root.
+        """
+        bundled = getattr(sys, "_MEIPASS", None)
+        if bundled:
+            candidate = os.path.join(bundled, "logo.png")
+            if os.path.isfile(candidate):
+                return candidate
+        return os.path.join(database.BASE_DIR, "logo.png")
+
+    def set_window_icon(self):
+        """Use logo.png as the window/taskbar icon. Best-effort: ignore if missing."""
+        try:
+            path = self.logo_path()
+            if os.path.isfile(path):
+                self._icon_image = tk.PhotoImage(file=path)
+                self.iconphoto(True, self._icon_image)
+        except Exception:
+            pass
 
     def center_window(self):
         self.update_idletasks()
@@ -66,6 +97,16 @@ class DownloaderApp(ctk.CTk):
         # 1. Header frame (title, subtitle and language selector)
         self.header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.header_frame.pack(fill="x", padx=20, pady=(15, 10))
+
+        # Logo (left of the title); skipped gracefully if the file is missing
+        try:
+            if os.path.isfile(self.logo_path()):
+                logo_img = Image.open(self.logo_path())
+                self.logo_image = ctk.CTkImage(light_image=logo_img, dark_image=logo_img, size=(56, 56))
+                self.logo_label = ctk.CTkLabel(self.header_frame, image=self.logo_image, text="")
+                self.logo_label.pack(side="left", padx=(0, 12))
+        except Exception:
+            pass
 
         self.header_text_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
         self.header_text_frame.pack(side="left", fill="x", expand=True)
@@ -199,6 +240,46 @@ class DownloaderApp(ctk.CTk):
         )
         self.format_selector.set("Video (MP4)")
         self.format_selector.pack(fill="x", pady=2)
+
+        # Subtitles option: checkbox + language selector
+        self.subs_frame = ctk.CTkFrame(self.format_subframe, fg_color="transparent")
+        self.subs_frame.pack(fill="x", pady=(6, 2))
+
+        self.subs_checkbox = ctk.CTkCheckBox(
+            self.subs_frame,
+            text=tr("subs_checkbox"),
+            variable=self.download_subs,
+            command=self.toggle_subs,
+            fg_color="#00ADB5",
+            hover_color="#393E46",
+            font=ctk.CTkFont(size=12)
+        )
+        self.subs_checkbox.pack(side="left")
+
+        self.subs_lang_selector = ctk.CTkOptionMenu(
+            self.subs_frame,
+            values=list(self.sub_lang_map.keys()),
+            width=150,
+            fg_color="#393E46",
+            button_color="#00ADB5",
+            button_hover_color="#393E46",
+            font=ctk.CTkFont(size=11)
+        )
+        self.subs_lang_selector.set("Italiano")
+        self.subs_lang_selector.configure(state="disabled")
+        self.subs_lang_selector.pack(side="right")
+
+        # Second row: also export a clean .txt (no timestamps)
+        self.subs_txt_checkbox = ctk.CTkCheckBox(
+            self.format_subframe,
+            text=tr("subs_txt_checkbox"),
+            variable=self.subs_as_txt,
+            state="disabled",
+            fg_color="#00ADB5",
+            hover_color="#393E46",
+            font=ctk.CTkFont(size=12)
+        )
+        self.subs_txt_checkbox.pack(anchor="w", pady=(2, 2))
 
         # Destination folder column
         self.path_subframe = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
@@ -525,6 +606,12 @@ class DownloaderApp(ctk.CTk):
         else:
             self.download_mode = "audio"
 
+    def toggle_subs(self):
+        """Enable/disable the subtitle sub-options based on the main checkbox."""
+        state = "normal" if self.download_subs.get() else "disabled"
+        self.subs_lang_selector.configure(state=state)
+        self.subs_txt_checkbox.configure(state=state)
+
     def change_cookie_browser(self, value: str):
         """Save the chosen cookie browser to the DB."""
         db_value = "none" if value == tr("cookie_none") else value.lower()
@@ -602,12 +689,19 @@ class DownloaderApp(ctk.CTk):
         self.progress_bar.set(0.0)
         self.stats_label.configure(text=tr("stats_init"))
 
+        want_subs = self.download_subs.get()
+        sub_langs = self.sub_lang_map.get(self.subs_lang_selector.get(), "it")
+        subs_as_txt = self.subs_as_txt.get()
+
         def download_task():
             # Blocking call to the downloader
             success = self.downloader.download(
                 url,
                 mode=self.download_mode,
-                progress_callback=self.progress_callback_bridge
+                progress_callback=self.progress_callback_bridge,
+                download_subs=want_subs,
+                sub_langs=sub_langs,
+                subs_as_txt=subs_as_txt
             )
             self.after(0, self.on_download_complete, success)
 
@@ -655,6 +749,9 @@ class DownloaderApp(ctk.CTk):
             self.paste_button.configure(state="disabled")
             self.browse_button.configure(state="disabled")
             self.format_selector.configure(state="disabled")
+            self.subs_checkbox.configure(state="disabled")
+            self.subs_lang_selector.configure(state="disabled")
+            self.subs_txt_checkbox.configure(state="disabled")
             self.cookie_selector.configure(state="disabled")
             self.cookie_browse_button.configure(state="disabled")
             self.cookie_clear_button.configure(state="disabled")
@@ -665,6 +762,10 @@ class DownloaderApp(ctk.CTk):
             self.paste_button.configure(state="normal")
             self.browse_button.configure(state="normal")
             self.format_selector.configure(state="normal")
+            self.subs_checkbox.configure(state="normal")
+            subs_on = self.download_subs.get()
+            self.subs_lang_selector.configure(state="normal" if subs_on else "disabled")
+            self.subs_txt_checkbox.configure(state="normal" if subs_on else "disabled")
             self.cookie_selector.configure(state="normal")
             self.cookie_browse_button.configure(state="normal")
             self.cookie_clear_button.configure(state="normal")

@@ -190,12 +190,133 @@ class VideoDownloader:
             logger.error(f"Exception while extracting info: {e}")
             return None
 
-    def download(self, url: str, mode: str = "video", progress_callback=None) -> bool:
+    @staticmethod
+    def _find_srt_paths(stdout: str) -> list[str]:
+        """
+        Extract the subtitle file paths from yt-dlp's output (lines like
+        "Writing video subtitles to: PATH" or "Destination: PATH"), then resolve
+        each to its final .srt sibling on disk. Returns existing .srt paths only.
+        """
+        found: list[str] = []
+        path_re = re.compile(r"(?:subtitles to:|Destination:)\s*(.+\.(?:srt|vtt|srv\d|ttml|json3))\s*$")
+        for line in stdout.splitlines():
+            m = path_re.search(line.strip())
+            if not m:
+                continue
+            candidate = m.group(1).strip().strip('"')
+            srt = os.path.splitext(candidate)[0] + ".srt"
+            if os.path.isfile(srt) and srt not in found:
+                found.append(srt)
+        return found
+
+    @staticmethod
+    def _srt_to_txt(srt_path: str) -> str | None:
+        """
+        Convert an .srt file into a clean .txt: drop the sequence numbers, the
+        "00:00:00,000 --> ..." timestamp lines and inline tags, then collapse the
+        consecutive duplicate lines that auto-generated captions produce.
+        Returns the path of the written .txt, or None on error.
+        """
+        try:
+            with open(srt_path, "r", encoding="utf-8", errors="replace") as f:
+                raw_lines = f.read().splitlines()
+
+            cleaned: list[str] = []
+            for line in raw_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if "-->" in line:  # timestamp line
+                    continue
+                if line.isdigit():  # subtitle index
+                    continue
+                # Strip inline tags like <c>, <00:00:00.000>, <i> ...
+                line = re.sub(r"<[^>]+>", "", line).strip()
+                if not line:
+                    continue
+                # Skip if identical to the previous kept line (rolling auto-subs)
+                if cleaned and cleaned[-1] == line:
+                    continue
+                cleaned.append(line)
+
+            txt_path = os.path.splitext(srt_path)[0] + ".txt"
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(cleaned))
+            logger.info(f"Wrote clean transcript: {txt_path}")
+            return txt_path
+        except Exception as e:
+            logger.warning(f"Could not convert subtitles to txt ({srt_path}): {e}")
+            return None
+
+    def _download_subtitles(self, url: str, output_template: str, sub_langs: str,
+                            subs_as_txt: bool = False) -> bool:
+        """
+        Download subtitles (manual + auto-generated) as .srt in a standalone yt-dlp
+        run with --skip-download. Run AFTER the media download so a YouTube 429
+        rate-limit on captions never fails the actual video/audio download.
+        If subs_as_txt is True, also write a clean .txt next to each .srt.
+        Returns True on success, False on any error (logged as a warning).
+        """
+        cmd = [
+            self.yt_dlp_path,
+            "--skip-download",
+            "--write-subs",
+            "--write-auto-subs",
+            "--sub-langs", sub_langs,
+            "--convert-subs", "srt",
+            "--no-playlist",
+            "--windows-filenames",
+            # Mitigate YouTube rate-limiting (HTTP 429): pause between requests and retry.
+            "--sleep-requests", "1",
+            "--retries", "10",
+            "--retry-sleep", "5",
+            "-o", output_template,
+        ]
+        cmd.extend(self._get_cookie_args())
+        cmd.append(url)
+        logger.info(f"Fetching subtitles ({sub_langs}): {' '.join(cmd)}")
+
+        try:
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                startupinfo=startupinfo,
+                timeout=120
+            )
+
+            if process.returncode == 0:
+                logger.info("Subtitles downloaded successfully.")
+                if subs_as_txt:
+                    for srt in self._find_srt_paths(process.stdout):
+                        self._srt_to_txt(srt)
+                return True
+
+            logger.warning(f"Could not download subtitles (code {process.returncode}): {process.stderr.strip()}")
+            return False
+        except Exception as e:
+            logger.warning(f"Exception while downloading subtitles: {e}")
+            return False
+
+    def download(self, url: str, mode: str = "video", progress_callback=None,
+                 download_subs: bool = False, sub_langs: str = "it",
+                 subs_as_txt: bool = False) -> bool:
         """
         Download the video or audio from a URL.
         - mode: "video" (best quality video + audio merged into mp4) or "audio" (extract mp3).
         - progress_callback: called on every progress update with signature:
                              callback(percentage: float, speed: str, eta: str, status: str)
+        - download_subs: if True, also download subtitles (manual + auto-generated),
+                         converted to .srt, alongside the media file.
+        - sub_langs: comma-separated subtitle languages to fetch (e.g. "it,en").
+        - subs_as_txt: if True, also write a clean .txt (no timestamps) next to each .srt.
         """
         download_dir = self.get_download_path()
         os.makedirs(download_dir, exist_ok=True)
@@ -297,8 +418,19 @@ class VideoDownloader:
 
             if process.returncode == 0:
                 logger.info("Download completed successfully!")
+
+                # Subtitles are fetched in a separate, non-fatal step: a YouTube 429
+                # (rate-limit) on captions must not mark the whole download as failed.
+                if download_subs:
+                    if progress_callback:
+                        progress_callback(100.0, "---", "00:00", "Sottotitoli...")
+                    subs_ok = self._download_subtitles(url, output_template, sub_langs, subs_as_txt)
+                    final_status = "Completato" if subs_ok else "Completato (sottotitoli non riusciti)"
+                else:
+                    final_status = "Completato"
+
                 if progress_callback:
-                    progress_callback(100.0, "0.0B/s", "00:00", "Completato")
+                    progress_callback(100.0, "0.0B/s", "00:00", final_status)
                 return True
             else:
                 logger.error(f"Error during download. Exit code: {process.returncode}")

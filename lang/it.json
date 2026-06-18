@@ -11,6 +11,8 @@
   "info_author": "Canale/Autore: {uploader}",
   "info_duration": "Durata: {duration}  |  Piattaforma: {extractor}",
   "format_label": "Formato di download:",
+  "subs_checkbox": "Scarica anche i sottotitoli",
+  "subs_txt_checkbox": "Anche come .txt (senza timestamp)",
   "path_label": "Cartella di salvataggio:",
   "browse": "Sfoglia",
   "cookie_browser_label": "Browser per cookie (Facebook/Instagram):",

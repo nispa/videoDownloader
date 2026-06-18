@@ -63,6 +63,7 @@ c:\lavori\video-downloader\
 │   ├── database.py         # Configurazione DB SQLite e percorsi dinamici
 │   ├── i18n.py             # Localizzazione della UI (carica le label da lang/*.json)
 │   └── clipboard.py        # Integrazione delle API per gli appunti di Windows
+├── logo.png                # Logo dell'app (icona finestra/taskbar e header)
 ├── VideoDownloader.exe     # Applicazione compilata standalone (root)
 ├── build_exe.py            # Script di compilazione con PyInstaller
 └── requirements.txt        # Dipendenze Python
@@ -87,6 +88,7 @@ L'interfaccia grafica moderna è costruita con `customtkinter` in modalità scur
 *   **Analisi in Background**: Non appena inserisci un link valido, l'app avvia un'estrazione metadati mostrando Titolo, Canale autore e Durata.
 *   **Verifica Preventiva degli URL**: Se inserisci un link non supportato, l'app ti avvisa istantaneamente a schermo prima ancora di provare a scaricarlo, interrogando la lista interna di oltre 1.480 estrattori caricata nel database.
 *   **Sfoglia Destinazione**: Puoi cambiare la cartella di salvataggio predefinita con un comodo selettore grafico. La scelta viene salvata nel database e mantenuta per i successivi avvii.
+*   **Download Sottotitoli / Trascrizione (YouTube e altri)**: Spunta *Scarica anche i sottotitoli* per salvare, insieme al video o all'audio, i sottotitoli (sia quelli manuali sia quelli auto-generati) in formato `.srt`. Scegli **una lingua per volta** (Italiano o English) dal menu a fianco. Con l'opzione aggiuntiva *Anche come .txt (senza timestamp)* viene generata anche una trascrizione in testo semplice, ripulita dai codici temporali e dalle righe duplicate. Il download dei sottotitoli è **non bloccante**: se YouTube limita le richieste (errore `HTTP 429`), il video viene comunque salvato e l'app segnala *Completato (sottotitoli non riusciti)*. Per ridurre i 429, imposta i cookie del browser e scarica una lingua alla volta.
 *   **Autenticazione tramite Cookie (Facebook/Instagram)**: Molte piattaforme social richiedono il login per accedere ai video, Reel inclusi. Seleziona dal menu *Browser per cookie* il browser in cui sei già loggato, oppure scegli un file `cookies.txt` esportato (che ha priorità sul browser).
 *   **Interfaccia Multilingua**: Cambia lingua dal menu a tendina in alto a destra (italiano e inglese inclusi). La scelta viene salvata e ripristinata all'avvio successivo.
 
