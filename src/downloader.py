@@ -33,12 +33,33 @@ class VideoDownloader:
         self.tools_dir = os.path.join(base_dir, "tools")
         self.yt_dlp_path = os.path.join(self.tools_dir, "yt-dlp.exe")
 
-        # Load the download path from the DB or fall back to the default
-        self.default_download_dir = database.get_setting("download_path")
-        if not self.default_download_dir:
-            self.default_download_dir = os.path.join(base_dir, "downloads")
+        # Fallback always living next to the app (same drive as the executable,
+        # so it survives removable/unmounted drives -> portability).
+        self.fallback_download_dir = os.path.join(base_dir, "downloads")
 
-        os.makedirs(self.default_download_dir, exist_ok=True)
+        # Load the download path from the DB or fall back to the default
+        configured = database.get_setting("download_path") or self.fallback_download_dir
+        self.default_download_dir = self._ensure_usable_dir(configured)
+
+    def _ensure_usable_dir(self, path: str) -> str:
+        """
+        Make sure `path` exists, creating it if needed. If that fails (e.g. the
+        drive is unmounted/removed), log a warning and fall back to the app-local
+        downloads folder instead of crashing. Returns a usable path.
+        """
+        try:
+            os.makedirs(path, exist_ok=True)
+            return path
+        except OSError as e:
+            logger.warning(
+                f"Download folder '{path}' is not available ({e}). "
+                f"Falling back to '{self.fallback_download_dir}'."
+            )
+            try:
+                os.makedirs(self.fallback_download_dir, exist_ok=True)
+            except OSError as e2:
+                logger.error(f"Could not create the fallback download folder: {e2}")
+            return self.fallback_download_dir
 
     def is_url_supported(self, url: str) -> bool:
         """
@@ -109,9 +130,12 @@ class VideoDownloader:
         return False
 
     def get_download_path(self) -> str:
-        """Return the currently configured download directory."""
-        path = database.get_setting("download_path")
-        return path if path else self.default_download_dir
+        """
+        Return a usable download directory: the configured one if reachable,
+        otherwise the app-local fallback. Never raises on a missing drive.
+        """
+        path = database.get_setting("download_path") or self.default_download_dir
+        return self._ensure_usable_dir(path)
 
     def _get_cookie_args(self) -> list[str]:
         """
@@ -319,7 +343,6 @@ class VideoDownloader:
         - subs_as_txt: if True, also write a clean .txt (no timestamps) next to each .srt.
         """
         download_dir = self.get_download_path()
-        os.makedirs(download_dir, exist_ok=True)
 
         # Output filename template. The title is truncated to 100 characters because
         # some sites (e.g. Facebook) use the whole post description as the title,
