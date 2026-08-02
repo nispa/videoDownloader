@@ -6,6 +6,8 @@ A modern, lightweight, standalone Windows application to download videos or extr
 
 The program automatically handles the downloading and updating of third-party dependencies (`yt-dlp` and `ffmpeg`), stores settings in a local SQLite database, separates logs, and features instant local URL validation.
 
+The installation is designed to be **portable**: the executable can be copied to another computer and configures itself on first launch, with verified downloads, alternative sources when a host is unreachable, and messages that name the actual cause of a problem instead of a generic connection error.
+
 ---
 
 ## ⬇️ Download (recommended)
@@ -41,7 +43,9 @@ To make installation and usage extremely simple, the project contains two ready-
     5. Exit.
 
 > [!NOTE]
-> If you run `run.bat` before setting up, the script will automatically detect that the `.venv` folder is missing and run `setup.bat` first.
+> If you run `run.bat` before setting up, the script will detect that no working virtual environment is present and run `setup.bat` first.
+
+Both scripts switch to their own folder automatically, so they work when launched from a shortcut, from another drive, or via *Run as administrator*. The Python check actually runs the interpreter rather than merely looking it up on the `PATH`: on Windows 11 a Microsoft Store alias exists even when Python is **not** installed, and would fool a superficial test.
 
 ---
 
@@ -61,6 +65,7 @@ c:\lavori\video-downloader\
 │   ├── downloader.py       # Download engine and metadata extraction
 │   ├── bootstrapper.py     # Tool manager and auto-updater
 │   ├── database.py         # SQLite DB config and dynamic path helper
+│   ├── netconfig.py        # OS trust store and proxy diagnostics (corporate networks)
 │   ├── i18n.py             # UI localization (loads labels from lang/*.json)
 │   └── clipboard.py        # Windows Clipboard API integration
 ├── logo.png                # App logo (window/taskbar icon and header)
@@ -90,6 +95,12 @@ The desktop graphical interface is built with `customtkinter` with an elegant, r
 *   **Custom Downloads Folder**: Change your downloads directory using a native file explorer. Your choice is saved in the SQLite database and remembered across sessions.
 *   **Subtitles / Transcript download (YouTube and others)**: Tick *Also download subtitles* to save the captions (both manual and auto-generated) as an `.srt` file alongside the video or audio. Pick **one language at a time** (Italian or English) from the dropdown next to it. With the extra *Also as .txt (no timestamps)* option, a clean plain-text transcript is also produced, stripped of timecodes and duplicated rolling lines. Subtitle fetching is **non-blocking**: if YouTube rate-limits the requests (`HTTP 429`), the video is still saved and the app reports *Completato (sottotitoli non riusciti)*. To reduce 429s, set the browser cookies and download one language at a time.
 *   **Cookie Authentication (Facebook/Instagram)**: Many social platforms require a login to access videos, Reels included. Pick the browser where you are already logged in from the *Cookie browser* dropdown, or select an exported `cookies.txt` file (which takes priority over the browser).
+*   **One-click cookie import**: The *Import* button next to the browser dropdown generates a `cookies.txt` file from the selected browser and selects it automatically. This mainly matters for **portability**: cookies read straight from a browser are encrypted with DPAPI and readable only by the Windows user who created them, while the exported file works on another computer or profile too. The export performs no network request.
+
+    > [!WARNING]
+    > The generated file contains the sessions of **every** site you are signed in to with that browser, not just the one you are downloading from. Treat it like a password and do not share it. It is saved in `data/`, a folder already excluded from Git.
+
+*   **Direct media URLs**: Besides pages on supported sites, you can paste the address of a media file or a streaming manifest directly (`.mp4`, `.m3u8`, `.mpd`, `.ts`, `.mov`, `.aac`, `.opus` and others), including signed URLs carrying an expiry token. Useful for platforms that build the page in JavaScript, where the stream address has to be taken from the *Network* panel of the browser developer tools.
 *   **Multi-language UI**: Switch language from the dropdown in the top-right corner (Italian and English included). The selection is saved and restored on the next start.
 
 ### Notes on Facebook / Instagram downloads
@@ -98,6 +109,14 @@ yt-dlp reads the cookies directly from your browser profile on disk:
 
 *   **Firefox** works out of the box, even while the browser is open.
 *   **Chrome/Edge**: the cookie database is locked while the browser is running, so close it completely before downloading. Recent Chrome versions (127+) encrypt cookies with App-Bound Encryption and may not work at all; in that case export a `cookies.txt` file with a browser extension (e.g. *Get cookies.txt LOCALLY*) and select it in the GUI.
+
+If the *Import* button fails, the message names the precise cause and the fix:
+
+| Message | Fix |
+|---|---|
+| The cookie database is locked | Close the browser completely, checking the notification area next to the clock as well |
+| No profile was found | The browser is not installed, or it uses a profile other than the default one |
+| Cookies protected by DPAPI | Run the export from the same Windows account you use the browser with |
 
 ### Adding a new language
 
@@ -146,7 +165,33 @@ The script will package the GUI in `--noconsole` mode (no black command window o
 
 ---
 
-## 5. License
+## 5. Portability, Corporate Networks and Troubleshooting
+
+### Copying the app to another computer
+
+The executable is self-sufficient: on first launch it downloads `yt-dlp` and `FFmpeg` and recreates its own folders. Several measures make that reliable on managed machines too:
+
+*   **Verified downloads**: files are written to a `.part` file and replace the original only after being executed successfully. An interrupted transfer never leaves a broken binary behind, and an already corrupted copy is detected and downloaded again instead of being reused.
+*   **Alternative sources**: if the GitHub API is unreachable or has exhausted its rate limit (60 requests per hour per IP address, easily saturated on a shared network), `yt-dlp` is fetched from a direct URL. A mirror is available for FFmpeg when gyan.dev does not respond.
+*   **Guaranteed data folder**: if the application folder is not writable — for instance under `C:\Program Files`, on a managed Desktop, or on a read-only USB stick — data, logs and tools are created in `%LOCALAPPDATA%\VideoDownloader` rather than letting startup fail.
+*   **Reduced mode**: if FFmpeg is unavailable the app still starts and says so. Downloads keep working by fetching an already combined stream; merging separate video and audio streams and converting to MP3 are not possible.
+
+### Antivirus
+
+`yt-dlp.exe` is a long-standing false positive for many antivirus products. If the file disappears from disk right after being downloaded, the app detects it and suggests adding an exclusion for the `tools/` folder.
+
+### Corporate networks with a proxy
+
+*   **Certificates**: if your organization uses a proxy that inspects HTTPS traffic, TLS verification is routed through the **Windows certificate store** via the `truststore` package, so the corporate root CA is honoured exactly as it is in the browser. Without that package the app still works, but on such a network it would fail with a certificate error.
+*   **Proxy**: a proxy configured in the Windows settings is already picked up automatically. If the network uses an automatic configuration file (**PAC**) instead, the app detects it and says so: ask IT for the proxy address and port, then set them in the `HTTP_PROXY` and `HTTPS_PROXY` environment variables.
+
+### When something goes wrong
+
+Error messages name the concrete cause — TLS certificate, proxy, rate limit, timeout, denied permissions, antivirus quarantine — together with the path of the log file to consult. Full detail is always in `logs/app.log` (startup and tools) and `logs/download.log` (downloads).
+
+---
+
+## 6. License
 
 The source code of this project is licensed under the [MIT License](LICENSE).
 

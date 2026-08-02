@@ -6,6 +6,8 @@ Un'applicazione Windows moderna, leggera e standalone per scaricare video o estr
 
 Il programma gestisce autonomamente il download e l'aggiornamento dei componenti di terze parti (`yt-dlp` e `ffmpeg`), archivia le impostazioni in un database locale SQLite, separa accuratamente i file di log e integra una verifica preventiva degli URL.
 
+L'installazione è progettata per essere **portabile**: l'eseguibile può essere copiato su un altro computer e si configura da solo al primo avvio, con download verificati, sorgenti alternative in caso di irraggiungibilità e messaggi che indicano la causa reale di un eventuale problema anziché un generico errore di connessione.
+
 ---
 
 ## ⬇️ Download (consigliato)
@@ -41,7 +43,9 @@ Per semplificare l'installazione e l'uso, il progetto include due script batch p
     5. Uscire.
 
 > [!NOTE]
-> Se avvii `run.bat` e non hai ancora eseguito il setup, lo script rileverà automaticamente l'assenza della cartella `.venv` ed eseguirà `setup.bat` prima di avviare l'opzione desiderata.
+> Se avvii `run.bat` e non hai ancora eseguito il setup, lo script rileverà l'assenza di un ambiente virtuale funzionante ed eseguirà `setup.bat` prima di avviare l'opzione desiderata.
+
+Entrambi gli script si riportano automaticamente nella propria cartella, quindi funzionano anche se lanciati da un collegamento, da un'altra unità o con *Esegui come amministratore*. Il controllo di Python esegue davvero l'interprete anziché limitarsi a cercarlo nel `PATH`: su Windows 11 un alias del Microsoft Store è presente anche quando Python **non** è installato, e ingannerebbe una verifica superficiale.
 
 ---
 
@@ -61,6 +65,7 @@ c:\lavori\video-downloader\
 │   ├── downloader.py       # Gestione del download ed estrazione metadati
 │   ├── bootstrapper.py     # Download e auto-aggiornamento dei tool
 │   ├── database.py         # Configurazione DB SQLite e percorsi dinamici
+│   ├── netconfig.py        # Certificati di sistema e diagnostica proxy (reti aziendali)
 │   ├── i18n.py             # Localizzazione della UI (carica le label da lang/*.json)
 │   └── clipboard.py        # Integrazione delle API per gli appunti di Windows
 ├── logo.png                # Logo dell'app (icona finestra/taskbar e header)
@@ -90,6 +95,12 @@ L'interfaccia grafica moderna è costruita con `customtkinter` in modalità scur
 *   **Sfoglia Destinazione**: Puoi cambiare la cartella di salvataggio predefinita con un comodo selettore grafico. La scelta viene salvata nel database e mantenuta per i successivi avvii.
 *   **Download Sottotitoli / Trascrizione (YouTube e altri)**: Spunta *Scarica anche i sottotitoli* per salvare, insieme al video o all'audio, i sottotitoli (sia quelli manuali sia quelli auto-generati) in formato `.srt`. Scegli **una lingua per volta** (Italiano o English) dal menu a fianco. Con l'opzione aggiuntiva *Anche come .txt (senza timestamp)* viene generata anche una trascrizione in testo semplice, ripulita dai codici temporali e dalle righe duplicate. Il download dei sottotitoli è **non bloccante**: se YouTube limita le richieste (errore `HTTP 429`), il video viene comunque salvato e l'app segnala *Completato (sottotitoli non riusciti)*. Per ridurre i 429, imposta i cookie del browser e scarica una lingua alla volta.
 *   **Autenticazione tramite Cookie (Facebook/Instagram)**: Molte piattaforme social richiedono il login per accedere ai video, Reel inclusi. Seleziona dal menu *Browser per cookie* il browser in cui sei già loggato, oppure scegli un file `cookies.txt` esportato (che ha priorità sul browser).
+*   **Importazione dei Cookie con un clic**: Il pulsante *Importa*, accanto al menu del browser, genera un file `cookies.txt` a partire dal browser selezionato e lo imposta automaticamente. Serve soprattutto per la **portabilità**: i cookie letti direttamente dal browser sono cifrati con DPAPI e leggibili solo dall'utente Windows che li ha creati, mentre il file esportato funziona anche su un altro computer o profilo. L'esportazione non effettua alcuna richiesta di rete.
+
+    > [!WARNING]
+    > Il file generato contiene le sessioni di **tutti** i siti a cui sei connesso con quel browser, non solo quello che stai scaricando. Trattalo come una password e non condividerlo. Viene salvato in `data/`, cartella già esclusa da Git.
+
+*   **Formati diretti**: Oltre alle pagine dei siti supportati puoi incollare direttamente l'indirizzo di un file multimediale o di un manifest di streaming (`.mp4`, `.m3u8`, `.mpd`, `.ts`, `.mov`, `.aac`, `.opus` e altri), inclusi gli URL firmati con token di scadenza. Utile per le piattaforme che costruiscono la pagina in JavaScript, dove l'indirizzo del flusso va recuperato dal pannello *Rete* degli strumenti di sviluppo del browser.
 *   **Interfaccia Multilingua**: Cambia lingua dal menu a tendina in alto a destra (italiano e inglese inclusi). La scelta viene salvata e ripristinata all'avvio successivo.
 
 ### Note sui download da Facebook / Instagram
@@ -98,6 +109,14 @@ yt-dlp legge i cookie direttamente dal profilo del browser su disco:
 
 *   **Firefox** funziona subito, anche con il browser aperto.
 *   **Chrome/Edge**: il database dei cookie è bloccato mentre il browser è in esecuzione, quindi chiudilo completamente prima di scaricare. Le versioni recenti di Chrome (127+) cifrano i cookie con la App-Bound Encryption e potrebbero non funzionare affatto; in tal caso esporta un file `cookies.txt` con un'estensione del browser (es. *Get cookies.txt LOCALLY*) e selezionalo nella GUI.
+
+Se l'importazione con il pulsante *Importa* non riesce, il messaggio indica la causa precisa e il rimedio:
+
+| Messaggio | Rimedio |
+|---|---|
+| Il database dei cookie è bloccato | Chiudi completamente il browser, controllando anche l'area di notifica accanto all'orologio |
+| Non è stato trovato alcun profilo | Il browser non è installato, oppure usa un profilo diverso da quello predefinito |
+| Cookie protetti da DPAPI | Esegui l'esportazione con lo stesso account Windows con cui usi il browser |
 
 ### Aggiungere una nuova lingua
 
@@ -146,7 +165,33 @@ Lo script compilerà automaticamente l'interfaccia grafica in modalità `--nocon
 
 ---
 
-## 5. Licenza
+## 5. Portabilità, reti aziendali e risoluzione dei problemi
+
+### Copiare l'app su un altro computer
+
+L'eseguibile è autosufficiente: al primo avvio scarica `yt-dlp` e `FFmpeg` e ricrea le proprie cartelle. Alcuni accorgimenti rendono il processo affidabile anche su macchine gestite:
+
+*   **Download verificati**: i file vengono scritti in `.part` e sostituiscono l'originale solo dopo essere stati eseguiti con successo. Un trasferimento interrotto non lascia mai un binario danneggiato, e una copia già corrotta viene rilevata e riscaricata invece di essere riutilizzata.
+*   **Sorgenti alternative**: se l'API di GitHub è irraggiungibile o ha esaurito il limite di richieste (60 all'ora per indirizzo IP, facile da saturare su una rete condivisa), `yt-dlp` viene scaricato da un indirizzo diretto. Per FFmpeg è previsto un mirror alternativo a gyan.dev.
+*   **Cartella dati garantita**: se la cartella dell'applicazione non è scrivibile — per esempio in `C:\Program Files`, su un Desktop gestito o su una chiavetta in sola lettura — dati, log e strumenti vengono creati in `%LOCALAPPDATA%\VideoDownloader` anziché far fallire l'avvio.
+*   **Modalità ridotta**: se FFmpeg non è disponibile l'app si avvia comunque e lo segnala. I download continuano a funzionare scaricando un flusso già combinato; non sono possibili l'unione di video e audio separati né la conversione in MP3.
+
+### Antivirus
+
+`yt-dlp.exe` è un falso positivo storico di molti antivirus. Se dopo il download il file sparisce dal disco, l'app lo rileva e suggerisce di aggiungere un'esclusione per la cartella `tools/`.
+
+### Reti aziendali con proxy
+
+*   **Certificati**: se la tua organizzazione usa un proxy che ispeziona il traffico HTTPS, la verifica TLS viene agganciata all'**archivio certificati di Windows** tramite il pacchetto `truststore`, così la root CA aziendale è riconosciuta esattamente come nel browser. Senza questo pacchetto l'app funziona ugualmente, ma su una rete di questo tipo fallirebbe con un errore di certificato.
+*   **Proxy**: un proxy configurato nelle impostazioni di Windows viene già usato automaticamente. Se invece la rete usa un file di configurazione automatica (**PAC**), l'app lo rileva e lo segnala: chiedi all'assistenza informatica indirizzo e porta del proxy, poi impostali nelle variabili d'ambiente `HTTP_PROXY` e `HTTPS_PROXY`.
+
+### Se qualcosa non funziona
+
+I messaggi di errore indicano la causa concreta — certificato TLS, proxy, limite di richieste, timeout, permessi negati, quarantena antivirus — insieme al percorso del file di log da consultare. Il dettaglio completo è sempre in `logs/app.log` (avvio e strumenti) e `logs/download.log` (download).
+
+---
+
+## 6. Licenza
 
 Il codice sorgente di questo progetto è rilasciato sotto la [Licenza MIT](LICENSE).
 
