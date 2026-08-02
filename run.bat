@@ -3,6 +3,11 @@
 :: active, multi-byte characters desync the cmd batch parser.
 chcp 65001 >nul
 
+:: Always work from the folder this script lives in. Launching it from a
+:: shortcut, via "Run as administrator" (which starts in System32) or from
+:: another drive would otherwise break every relative path below.
+cd /d "%~dp0"
+
 :menu
 cls
 echo =======================================================
@@ -29,7 +34,7 @@ goto menu
 :run_gui
 cls
 echo [+] Starting the Graphical Interface...
-if not exist ".venv" (
+if not exist ".venv\Scripts\python.exe" (
     echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )
@@ -40,7 +45,7 @@ goto menu
 :run_cli
 cls
 echo [+] Starting the Command Line Interface...
-if not exist ".venv" (
+if not exist ".venv\Scripts\python.exe" (
     echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )
@@ -51,7 +56,7 @@ goto menu
 :compile
 cls
 echo [+] Building the standalone application...
-if not exist ".venv" (
+if not exist ".venv\Scripts\python.exe" (
     echo [WARNING] Virtual environment not found. Running automatic setup...
     call setup.bat
 )

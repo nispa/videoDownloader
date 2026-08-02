@@ -1,6 +1,14 @@
-requests==2.31.0
-tqdm==4.66.1
-colorama==0.4.6
-customtkinter==5.2.2
-pillow==10.2.0
-pyinstaller==6.3.0
+# Minimum versions rather than exact pins: an exact pin has no wheel for the
+# Python that ships on a new PC (pillow 10.2 and pyinstaller 6.3 have none for
+# 3.13+), so pip falls back to building from source and the setup fails.
+requests>=2.31
+tqdm>=4.66
+colorama>=0.4.6
+customtkinter>=5.2.2
+pillow>=10.2
+pyinstaller>=6.11
+
+# Routes TLS verification through the Windows certificate store, so that a
+# corporate root CA is honoured. Optional: without it the app falls back to
+# certifi's bundle and only fails behind a TLS-inspecting proxy.
+truststore>=0.9

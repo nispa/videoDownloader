@@ -161,11 +161,20 @@ def main():
     print(f"{Fore.CYAN}=== Avvio in corso ===")
     print(f"{Fore.WHITE}Verifica dipendenze in corso (yt-dlp, ffmpeg)...")
 
-    if not bootstrapper.run_bootstrap():
-        print(f"\n{Fore.RED}Errore critico: Impossibile configurare gli strumenti di download.")
-        print("Verifica la connessione ad internet e riprova.")
+    boot = bootstrapper.run_bootstrap()
+    if not boot.usable:
+        print(f"\n{Fore.RED}Errore critico: impossibile configurare gli strumenti di download.\n")
+        print(f"{Fore.WHITE}{boot.message()}")
+        print(f"\n{Fore.WHITE}File di log: {os.path.join(database.LOGS_DIR, 'app.log')}")
         input("\nPremi Invio per uscire...")
         sys.exit(1)
+
+    if boot.degraded:
+        print(f"\n{Fore.YELLOW}Attenzione: FFmpeg non e' disponibile.")
+        print(f"{Fore.WHITE}I download funzionano, ma non e' possibile unire video e audio")
+        print("separati ne' convertire in mp3.\n")
+        print(f"{Fore.WHITE}{boot.message()}")
+        time.sleep(4)
 
     # Initialize the downloader
     downloader = VideoDownloader()

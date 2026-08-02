@@ -18,6 +18,10 @@ def main():
         "--onefile",
         "--name=VideoDownloader",
         "--paths=src",
+        # truststore is imported inside a try/except at runtime, so make sure
+        # PyInstaller bundles it: without it the frozen exe silently falls back
+        # to certifi and fails behind a TLS-inspecting corporate proxy.
+        "--hidden-import=truststore",
     ]
 
     # Bundle the logo so the single-file exe shows it without external files.

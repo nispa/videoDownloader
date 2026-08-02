@@ -9,6 +9,11 @@ show up automatically in the language dropdown.
 The built-in Italian and English dictionaries below are written to disk on
 first run (or whenever the files are missing), so the standalone exe is
 self-healing.
+
+Built-in files also carry a "_version". When the built-in strings change, the
+it.json / en.json shipped by a previous release would otherwise keep overriding
+them with the old text, so those two files are regenerated on a version bump.
+Languages added by the user (fr.json, ...) are never touched.
 """
 import os
 import json
@@ -18,6 +23,10 @@ import database
 logger = logging.getLogger("i18n")
 
 LANG_DIR = os.path.join(database.BASE_DIR, "lang")
+
+# Bump whenever the built-in strings below change, so that stale it.json/en.json
+# files left over from a previous version get regenerated instead of winning.
+LANG_FILE_VERSION = 4
 
 # Built-in languages, used to (re)create the JSON files and as a fallback
 # for keys missing from user-edited files. "_name" is the display name shown
@@ -38,12 +47,22 @@ BUILTIN_LANGUAGES = {
         "format_label": "Formato di download:",
         "path_label": "Cartella di salvataggio:",
         "browse": "Sfoglia",
+        "subs_checkbox": "Scarica anche i sottotitoli",
+        "subs_txt_checkbox": "Anche come .txt (senza timestamp)",
         "cookie_browser_label": "Browser per cookie (Facebook/Instagram):",
         "cookie_none": "Nessuno",
         "cookie_file_label": "File cookies.txt (opzionale):",
         "cookie_file_dialog_title": "Seleziona il file cookies.txt",
         "cookie_file_dialog_text": "File di testo",
         "cookie_file_dialog_all": "Tutti i file",
+        "cookie_import": "Importa",
+        "cookie_import_running": "Attendi...",
+        "cookie_import_no_browser_title": "Seleziona un browser",
+        "cookie_import_no_browser_body": "Scegli prima il browser da cui importare i cookie nell'elenco a sinistra.",
+        "cookie_import_ok_title": "Cookie importati",
+        "cookie_import_ok_body": "Importati {count} cookie da {browser}.\n\nFile creato:\n{path}\n\nÈ ora selezionato automaticamente e funziona anche su un altro computer.\n\nAttenzione: il file contiene le sessioni di tutti i siti a cui sei connesso con {browser}. Trattalo come una password e non condividerlo.",
+        "cookie_import_fail_title": "Importazione non riuscita",
+        "cookie_import_fail_body": "Non è stato possibile importare i cookie.\n\n{details}",
         "download_now": "SCARICA ORA",
         "downloading": "DOWNLOAD IN CORSO...",
         "stats_init": "Inizializzazione download...",
@@ -63,9 +82,12 @@ BUILTIN_LANGUAGES = {
         "msg_error_title": "Errore",
         "msg_error_body": "Si è verificato un errore durante il download o il post-processing. Controlla il log.",
         "boot_status": "Inizializzazione strumenti locali in corso...",
-        "boot_error_status": "Errore: Impossibile scaricare o configurare gli strumenti di download.\nVerifica la connessione ad internet e riavvia il programma.",
+        "boot_error_status": "Errore: impossibile configurare gli strumenti di download.\nDettagli nella finestra di errore e nel file di log.",
         "boot_error_title": "Errore di Inizializzazione",
-        "boot_error_body": "Impossibile configurare gli strumenti locali (yt-dlp/ffmpeg).\nVerifica la connessione a Internet e riprova."
+        "boot_error_body": "Impossibile configurare gli strumenti locali (yt-dlp).\n\n{details}\n\nFile di log: {log_path}",
+        "boot_degraded_title": "Funzionalità ridotte",
+        "boot_degraded_body": "FFmpeg non è disponibile: l'applicazione funziona, ma non può unire video e audio separati né convertire in mp3.\n\n{details}\n\nFile di log: {log_path}",
+        "msg_error_detail": "Si è verificato un errore durante il download.\n\n{details}\n\nFile di log: {log_path}"
     },
     "en": {
         "_name": "English",
@@ -82,12 +104,22 @@ BUILTIN_LANGUAGES = {
         "format_label": "Download format:",
         "path_label": "Save folder:",
         "browse": "Browse",
+        "subs_checkbox": "Also download subtitles",
+        "subs_txt_checkbox": "Also as .txt (no timestamps)",
         "cookie_browser_label": "Cookie browser (Facebook/Instagram):",
         "cookie_none": "None",
         "cookie_file_label": "cookies.txt file (optional):",
         "cookie_file_dialog_title": "Select the cookies.txt file",
         "cookie_file_dialog_text": "Text files",
         "cookie_file_dialog_all": "All files",
+        "cookie_import": "Import",
+        "cookie_import_running": "Wait...",
+        "cookie_import_no_browser_title": "Select a browser",
+        "cookie_import_no_browser_body": "First choose the browser to import the cookies from, in the list on the left.",
+        "cookie_import_ok_title": "Cookies imported",
+        "cookie_import_ok_body": "Imported {count} cookies from {browser}.\n\nFile created:\n{path}\n\nIt is now selected automatically and works on another computer too.\n\nWarning: the file contains the sessions of every site you are signed in to with {browser}. Treat it like a password and do not share it.",
+        "cookie_import_fail_title": "Import failed",
+        "cookie_import_fail_body": "The cookies could not be imported.\n\n{details}",
         "download_now": "DOWNLOAD NOW",
         "downloading": "DOWNLOADING...",
         "stats_init": "Initializing download...",
@@ -107,9 +139,12 @@ BUILTIN_LANGUAGES = {
         "msg_error_title": "Error",
         "msg_error_body": "An error occurred during the download or post-processing. Check the log.",
         "boot_status": "Initializing local tools...",
-        "boot_error_status": "Error: could not download or configure the download tools.\nCheck your internet connection and restart the program.",
+        "boot_error_status": "Error: could not configure the download tools.\nDetails in the error dialog and in the log file.",
         "boot_error_title": "Initialization Error",
-        "boot_error_body": "Could not configure the local tools (yt-dlp/ffmpeg).\nCheck your internet connection and try again."
+        "boot_error_body": "Could not configure the local tools (yt-dlp).\n\n{details}\n\nLog file: {log_path}",
+        "boot_degraded_title": "Reduced functionality",
+        "boot_degraded_body": "FFmpeg is not available: the application works, but it cannot merge separate video and audio streams nor convert to mp3.\n\n{details}\n\nLog file: {log_path}",
+        "msg_error_detail": "An error occurred during the download.\n\n{details}\n\nLog file: {log_path}"
     }
 }
 
@@ -119,11 +154,22 @@ DEFAULT_LANGUAGE = "it"
 _strings: dict = dict(BUILTIN_LANGUAGES[DEFAULT_LANGUAGE])
 _current_code: str = DEFAULT_LANGUAGE
 
+def _needs_rewrite(path: str) -> bool:
+    """True when the built-in language file is missing or was written by an older version."""
+    if not os.path.isfile(path):
+        return True
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("_version") != LANG_FILE_VERSION
+    except Exception:
+        return True  # unreadable or invalid JSON: replace it
+
+
 def ensure_language_files():
     """
-    Write the built-in language files to lang/ if they are missing.
-    Never raises: if the directory or files cannot be created, the app
-    still starts using the built-in dictionaries.
+    Write the built-in language files to lang/ if they are missing or outdated.
+    Never raises: if the directory or files cannot be created, the app still
+    starts using the built-in dictionaries.
     """
     try:
         os.makedirs(LANG_DIR, exist_ok=True)
@@ -132,10 +178,11 @@ def ensure_language_files():
         return
     for code, strings in BUILTIN_LANGUAGES.items():
         path = os.path.join(LANG_DIR, f"{code}.json")
-        if not os.path.isfile(path):
+        if _needs_rewrite(path):
             try:
                 with open(path, "w", encoding="utf-8") as f:
-                    json.dump(strings, f, ensure_ascii=False, indent=2)
+                    json.dump({"_version": LANG_FILE_VERSION, **strings},
+                              f, ensure_ascii=False, indent=2)
             except Exception as e:
                 logger.error(f"Could not write language file {path}: {e}")
 

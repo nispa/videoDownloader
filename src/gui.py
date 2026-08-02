@@ -14,6 +14,7 @@ import bootstrapper
 import i18n
 from i18n import tr
 from clipboard import get_clipboard_url
+import downloader as downloader_module
 from downloader import VideoDownloader
 
 # Global CustomTkinter appearance
@@ -29,9 +30,6 @@ class DownloaderApp(ctk.CTk):
         self.geometry("640x620")
         self.minsize(640, 620)
         self.resizable(False, False)
-
-        # Center the window on screen
-        self.center_window()
 
         # Set the window/taskbar icon from logo.png (next to the exe / project root)
         self.set_window_icon()
@@ -54,6 +52,9 @@ class DownloaderApp(ctk.CTk):
 
         # Build the UI
         self.create_widgets()
+
+        # Size and center the window once the real content height is known
+        self.center_window()
 
         # Run the bootstrapper in the background to avoid blocking the UI at startup
         self.run_bootstrapper_async()
@@ -82,21 +83,39 @@ class DownloaderApp(ctk.CTk):
             pass
 
     def center_window(self):
+        """
+        Size the window to its actual content and center it. Must be called
+        *after* create_widgets(): the geometry set before the widgets exist is
+        overridden by pack propagation, which is why the bottom of the layout
+        could end up cut off.
+
+        Two unit systems meet here. winfo_req*() and winfo_screen*() report Tk
+        pixels, while CustomTkinter's geometry() expects logical units and
+        applies the DPI scaling itself. Passing Tk pixels to geometry() scales
+        them a second time and produces a window far taller than the screen.
+        """
         self.update_idletasks()
-        width = 640
-        height = 620
-        x = (self.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        scaling = ctk.ScalingTracker.get_window_scaling(self)
+
+        # Everything below is in Tk pixels until the final conversion.
+        width = max(round(640 * scaling), self.winfo_reqwidth())
+        # Leave room for the title bar and the taskbar rather than letting the
+        # window grow past the bottom edge of the screen.
+        height = min(self.winfo_reqheight(), self.winfo_screenheight() - 120)
+
+        x = max(0, (self.winfo_screenwidth() - width) // 2)
+        y = max(0, (self.winfo_screenheight() - height) // 2 - 20)
+
+        self.geometry(f"{round(width / scaling)}x{round(height / scaling)}+{x}+{y}")
 
     def create_widgets(self):
         # Main frame with padding
         self.main_frame = ctk.CTkFrame(self, corner_radius=15)
-        self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        self.main_frame.pack(fill="both", expand=True, padx=20, pady=12)
 
         # 1. Header frame (title, subtitle and language selector)
         self.header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.header_frame.pack(fill="x", padx=20, pady=(15, 10))
+        self.header_frame.pack(fill="x", padx=20, pady=(10, 6))
 
         # Logo (left of the title); skipped gracefully if the file is missing
         try:
@@ -150,7 +169,7 @@ class DownloaderApp(ctk.CTk):
 
         # 2. Input frame (URL entry and paste button)
         self.input_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.input_frame.pack(fill="x", padx=20, pady=10)
+        self.input_frame.pack(fill="x", padx=20, pady=6)
 
         self.url_label = ctk.CTkLabel(
             self.input_frame,
@@ -185,7 +204,7 @@ class DownloaderApp(ctk.CTk):
 
         # 3. Video info frame (shown after analysis)
         self.info_frame = ctk.CTkFrame(self.main_frame, fg_color="#222831", corner_radius=10, height=100)
-        self.info_frame.pack(fill="x", padx=20, pady=10)
+        self.info_frame.pack(fill="x", padx=20, pady=6)
         self.info_frame.pack_propagate(False)
 
         self.info_status_label = ctk.CTkLabel(
@@ -220,7 +239,7 @@ class DownloaderApp(ctk.CTk):
 
         # 4. Format and destination folder frame
         self.settings_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.settings_frame.pack(fill="x", padx=20, pady=10)
+        self.settings_frame.pack(fill="x", padx=20, pady=6)
 
         # Format column
         self.format_subframe = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
@@ -330,8 +349,14 @@ class DownloaderApp(ctk.CTk):
         )
         self.cookie_label.pack(anchor="w", pady=(0, 5))
 
+        # The selector and the import button share one row: the window has a
+        # fixed height, so an extra row here would push the download button out
+        # of the visible area.
+        self.cookie_selector_row = ctk.CTkFrame(self.cookie_browser_subframe, fg_color="transparent")
+        self.cookie_selector_row.pack(fill="x", pady=2)
+
         self.cookie_selector = ctk.CTkOptionMenu(
-            self.cookie_browser_subframe,
+            self.cookie_selector_row,
             values=[tr("cookie_none"), "Edge", "Chrome", "Firefox", "Opera", "Brave"],
             command=self.change_cookie_browser,
             fg_color="#393E46",
@@ -339,8 +364,23 @@ class DownloaderApp(ctk.CTk):
             button_hover_color="#393E46",
             font=ctk.CTkFont(size=12)
         )
-        self.cookie_selector.pack(fill="x", pady=2)
+        self.cookie_selector.pack(side="left", fill="x", expand=True, padx=(0, 5))
         self.update_cookie_selector_display()
+
+        # One-click export of the selected browser's cookies into a cookies.txt.
+        # Browser cookies are encrypted per Windows user, so only the exported
+        # file can be reused on another computer or profile.
+        self.cookie_import_button = ctk.CTkButton(
+            self.cookie_selector_row,
+            text=tr("cookie_import"),
+            width=88,
+            height=28,
+            fg_color="#393E46",
+            hover_color="#00ADB5",
+            font=ctk.CTkFont(size=11),
+            command=self.import_cookies_from_browser
+        )
+        self.cookie_import_button.pack(side="right")
 
         # cookies.txt file column (alternative to the browser, takes priority)
         self.cookie_file_subframe = ctk.CTkFrame(self.cookie_frame, fg_color="transparent")
@@ -389,7 +429,7 @@ class DownloaderApp(ctk.CTk):
 
         # 5. Download and progress frame (bottom)
         self.progress_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.progress_frame.pack(fill="x", padx=20, pady=(15, 10))
+        self.progress_frame.pack(fill="x", padx=20, pady=(10, 6))
 
         self.download_button = ctk.CTkButton(
             self.progress_frame,
@@ -463,6 +503,8 @@ class DownloaderApp(ctk.CTk):
         self.cookie_label.configure(text=tr("cookie_browser_label"))
         self.cookie_file_label.configure(text=tr("cookie_file_label"))
         self.cookie_browse_button.configure(text=tr("browse"))
+        if self.cookie_import_button.cget("state") == "normal":
+            self.cookie_import_button.configure(text=tr("cookie_import"))
         self.boot_status.configure(text=tr("boot_status"))
         if not self.downloading:
             self.download_button.configure(text=tr("download_now"))
@@ -492,22 +534,41 @@ class DownloaderApp(ctk.CTk):
         """Run the bootstrapper in a separate thread to avoid blocking the UI."""
         def boot_task():
             # Bootstrap the local binaries
-            success = bootstrapper.run_bootstrap()
-            self.after(0, self.on_boot_complete, success)
+            result = bootstrapper.run_bootstrap()
+            self.after(0, self.on_boot_complete, result)
 
         threading.Thread(target=boot_task, daemon=True).start()
 
-    def on_boot_complete(self, success: bool):
+    def on_boot_complete(self, result):
         """Called on the main thread when the bootstrap finishes."""
         self.boot_progress.stop()
-        if success:
-            # Hide the overlay
-            self.boot_overlay.place_forget()
-            # Check the clipboard for a link
-            self.check_clipboard_on_start()
-        else:
+
+        if not result.usable:
+            # yt-dlp is missing: nothing can be downloaded. Show the real cause
+            # rather than blaming the internet connection.
             self.boot_status.configure(text=tr("boot_error_status"), text_color="red")
-            messagebox.showerror(tr("boot_error_title"), tr("boot_error_body"))
+            messagebox.showerror(
+                tr("boot_error_title"),
+                tr("boot_error_body", details=result.message(), log_path=self.app_log_path())
+            )
+            return
+
+        # Hide the overlay: the application is usable from here on
+        self.boot_overlay.place_forget()
+
+        if result.degraded:
+            messagebox.showwarning(
+                tr("boot_degraded_title"),
+                tr("boot_degraded_body", details=result.message(), log_path=self.app_log_path())
+            )
+
+        # Check the clipboard for a link
+        self.check_clipboard_on_start()
+
+    @staticmethod
+    def app_log_path() -> str:
+        """Path of the startup log, shown to the user in error dialogs."""
+        return os.path.join(database.LOGS_DIR, "app.log")
 
     # --- Clipboard and input ---
 
@@ -596,7 +657,17 @@ class DownloaderApp(ctk.CTk):
             self.video_duration_label.pack(anchor="w", padx=15, pady=(2, 15))
         else:
             self.info_state = "error"
-            self.info_status_label.configure(text=tr("info_error"), text_color="red")
+            # Prefer the actual yt-dlp diagnosis (missing binary, cookies, ...)
+            # over the generic "could not extract information" message.
+            details = self.downloader.last_error
+            if details:
+                # The window has a fixed size: keep the label to a single short line.
+                if len(details) > 110:
+                    details = details[:107] + "..."
+                text = f"{tr('info_error')}\n{details}"
+            else:
+                text = tr("info_error")
+            self.info_status_label.configure(text=text, text_color="red")
 
     # --- Settings handling ---
 
@@ -648,6 +719,52 @@ class DownloaderApp(ctk.CTk):
         """Remove the configured cookies file (falls back to browser cookies)."""
         database.set_setting("cookie_file", "")
         self.update_cookie_file_display()
+
+    def import_cookies_from_browser(self):
+        """
+        Export the cookies of the selected browser into data/cookies.txt and
+        select that file. Runs in a thread: reading a browser profile can take
+        a few seconds.
+        """
+        if self.downloading:
+            return
+
+        browser = database.get_setting("cookie_browser", "none")
+        if not browser or browser.lower() == "none":
+            messagebox.showwarning(
+                tr("cookie_import_no_browser_title"),
+                tr("cookie_import_no_browser_body")
+            )
+            return
+
+        dest_path = os.path.join(database.DB_DIR, "cookies.txt")
+        self.cookie_import_button.configure(state="disabled", text=tr("cookie_import_running"))
+
+        def import_task():
+            ok, detail = self.downloader.export_browser_cookies(browser, dest_path)
+            self.after(0, self.on_cookie_import_complete, ok, detail, browser, dest_path)
+
+        threading.Thread(target=import_task, daemon=True).start()
+
+    def on_cookie_import_complete(self, ok: bool, detail: str, browser: str, dest_path: str):
+        """Called on the main thread when the cookie export finishes."""
+        self.cookie_import_button.configure(state="normal", text=tr("cookie_import"))
+
+        if ok:
+            # The exported file takes priority over the browser in _get_cookie_args,
+            # so selecting it here is what makes the setup portable.
+            database.set_setting("cookie_file", dest_path)
+            self.update_cookie_file_display()
+            messagebox.showinfo(
+                tr("cookie_import_ok_title"),
+                tr("cookie_import_ok_body",
+                   count=detail, browser=browser.capitalize(), path=dest_path)
+            )
+        else:
+            messagebox.showerror(
+                tr("cookie_import_fail_title"),
+                tr("cookie_import_fail_body", details=detail)
+            )
 
     def update_path_display(self):
         """Show the current download directory in the destination entry."""
@@ -740,7 +857,14 @@ class DownloaderApp(ctk.CTk):
         else:
             self.progress_bar.set(0.0)
             self.stats_label.configure(text=tr("fail_label"), text_color="red")
-            messagebox.showerror(tr("msg_error_title"), tr("msg_error_body"))
+            details = self.downloader.last_error
+            if details:
+                messagebox.showerror(
+                    tr("msg_error_title"),
+                    tr("msg_error_detail", details=details, log_path=downloader_module.DOWNLOAD_LOG_FILE)
+                )
+            else:
+                messagebox.showerror(tr("msg_error_title"), tr("msg_error_body"))
 
     def set_ui_state(self, state: str):
         """Enable or disable the UI elements based on the download state."""
@@ -755,6 +879,7 @@ class DownloaderApp(ctk.CTk):
             self.cookie_selector.configure(state="disabled")
             self.cookie_browse_button.configure(state="disabled")
             self.cookie_clear_button.configure(state="disabled")
+            self.cookie_import_button.configure(state="disabled")
             self.lang_selector.configure(state="disabled")
             self.download_button.configure(state="disabled", text=tr("downloading"), fg_color="#393E46")
         else:
@@ -769,6 +894,7 @@ class DownloaderApp(ctk.CTk):
             self.cookie_selector.configure(state="normal")
             self.cookie_browse_button.configure(state="normal")
             self.cookie_clear_button.configure(state="normal")
+            self.cookie_import_button.configure(state="normal", text=tr("cookie_import"))
             self.lang_selector.configure(state="normal")
             self.download_button.configure(state="normal", text=tr("download_now"), fg_color="#00ADB5")
 
