@@ -70,9 +70,16 @@ FFMPEG_MIRRORS = [
      "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"),
 ]
 
+# Deno is the JavaScript runtime yt-dlp needs to solve YouTube's challenges:
+# without it some formats are missing. Optional: the app works without it.
+DENO_API_URL = "https://api.github.com/repos/denoland/deno/releases/latest"
+DENO_DIRECT_URL = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+DENO_ASSET_NAME = "deno-x86_64-pc-windows-msvc.zip"
+
 # Sanity floors used to reject a truncated download before it is promoted.
 MIN_YT_DLP_BYTES = 4 * 1024 * 1024
 MIN_FFMPEG_ZIP_BYTES = 10 * 1024 * 1024
+MIN_DENO_ZIP_BYTES = 10 * 1024 * 1024
 
 CHUNK_SIZE = 1024 * 64
 
@@ -88,6 +95,7 @@ class BootstrapResult:
     """
     yt_dlp_ok: bool = False
     ffmpeg_ok: bool = False
+    deno_ok: bool = False
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -567,6 +575,122 @@ def bootstrap_ffmpeg(errors: list[str]) -> bool:
     return True
 
 
+# --- Deno --------------------------------------------------------------------
+
+def _deno_version(version_line: str | None) -> str | None:
+    """Extract "2.5.4" from "deno 2.5.4 (stable, release, x86_64-pc-windows-msvc)"."""
+    if not version_line:
+        return None
+    match = re.search(r"deno (\S+)", version_line)
+    return match.group(1) if match else version_line
+
+
+def _latest_deno_release() -> tuple[str | None, str | None, str | None]:
+    """Return (version, asset_url, error_description) for the latest Deno release."""
+    try:
+        logger.info("Checking for the latest Deno version...")
+        r = requests.get(DENO_API_URL, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+    except requests.RequestException as e:
+        return None, None, f"Verifica della versione di Deno non riuscita. {describe_network_error(e, DENO_API_URL)}"
+    except ValueError as e:
+        return None, None, f"Risposta non valida dall'API di GitHub: {e}"
+
+    version = (data.get("tag_name") or "").lstrip("v") or None
+    asset_url = None
+    for asset in data.get("assets", []):
+        if asset.get("name") == DENO_ASSET_NAME:
+            asset_url = asset.get("browser_download_url")
+            break
+    return version, asset_url, None
+
+
+def _extract_deno(zip_path: str) -> bool:
+    """Extract deno.exe from `zip_path` into TOOLS_DIR. Returns True if found."""
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        for member in zip_ref.namelist():
+            if os.path.basename(member) != "deno.exe":
+                continue
+            target_path = os.path.join(TOOLS_DIR, "deno.exe")
+            part_path = target_path + ".part"
+            with zip_ref.open(member) as source, open(part_path, "wb") as target:
+                shutil.copyfileobj(source, target)
+            _promote(part_path, target_path)
+            logger.info("Extracted: deno.exe")
+            return True
+    return False
+
+
+def bootstrap_deno() -> bool:
+    """
+    Make sure a working deno.exe is available. Failures are only logged: yt-dlp
+    still works without a JavaScript runtime, with fewer YouTube formats.
+    """
+    deno_path = os.path.join(TOOLS_DIR, "deno.exe")
+
+    local_version = _deno_version(_probe_binary(deno_path, ["--version"]))
+    if local_version is None and os.path.exists(deno_path):
+        logger.warning("deno.exe presente ma non eseguibile: verra' riscaricato.")
+        _discard(deno_path)
+
+    latest_version, asset_url, lookup_error = _latest_deno_release()
+    if lookup_error:
+        logger.warning(lookup_error)
+
+    if local_version and (latest_version is None or local_version == latest_version):
+        if latest_version is None:
+            logger.info(f"Aggiornamenti non verificabili: uso Deno {local_version} gia' presente.")
+        else:
+            logger.info(f"Deno is already up to date: {local_version}")
+        database.update_tool_version("deno", local_version)
+        return True
+
+    if local_version:
+        logger.info(f"New update found for Deno: local={local_version}, latest={latest_version}")
+    else:
+        logger.info("deno.exe non disponibile localmente. Avvio del download...")
+
+    zip_temp_path = os.path.join(TOOLS_DIR, "deno_temp.zip")
+    candidates = list(dict.fromkeys(u for u in (asset_url, DENO_DIRECT_URL) if u))
+    last_error = lookup_error
+
+    for url in candidates:
+        try:
+            download_file(url, zip_temp_path, "Deno", min_bytes=MIN_DENO_ZIP_BYTES)
+            if _extract_deno(zip_temp_path):
+                break
+            last_error = "L'archivio di Deno scaricato non contiene deno.exe."
+            logger.warning(last_error)
+        except zipfile.BadZipFile:
+            last_error = "L'archivio di Deno scaricato e' danneggiato o incompleto."
+            logger.warning(last_error)
+        except Exception as e:
+            last_error = describe_network_error(e, url)
+            logger.warning(f"Download di Deno da {urlparse(url).netloc} non riuscito: {last_error}")
+        finally:
+            if os.path.exists(zip_temp_path):
+                try:
+                    os.remove(zip_temp_path)
+                except OSError:
+                    pass
+    else:
+        if local_version:
+            logger.warning("Aggiornamento non riuscito: continuo con la versione locale di Deno.")
+            return True
+        logger.warning(f"Deno non disponibile: alcuni formati di YouTube potrebbero mancare. {last_error}")
+        return False
+
+    installed_version = _deno_version(_probe_binary(deno_path, ["--version"]))
+    if installed_version is None:
+        logger.warning(_missing_binary_hint(deno_path, "deno.exe"))
+        return False
+
+    database.update_tool_version("deno", installed_version)
+    logger.info(f"Deno updated to version {installed_version}.")
+    return True
+
+
 # --- Extractors --------------------------------------------------------------
 
 def update_extractors_list(yt_dlp_path: str):
@@ -629,6 +753,7 @@ def run_bootstrap() -> BootstrapResult:
 
     result.yt_dlp_ok = bootstrap_yt_dlp(result.errors)
     result.ffmpeg_ok = bootstrap_ffmpeg(result.errors)
+    result.deno_ok = bootstrap_deno()
 
     if result.complete:
         logger.info("=== Bootstrapper Completed: All tools are ready! ===")

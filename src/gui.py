@@ -44,6 +44,9 @@ class DownloaderApp(ctk.CTk):
         self.subs_as_txt = ctk.BooleanVar(value=False)    # also save a clean .txt (no timestamps)
         self.sub_lang_map = {"Italiano": "it", "English": "en"}
         self.analyzing = False
+        # Link entered while another one was being analyzed: analyzed next,
+        # otherwise the preview would keep showing the previous link.
+        self.pending_url: str | None = None
         self.info_state = "ready"  # ready | analyzing | unsupported | error | shown
 
         # Available languages: {code: display name} and the reverse map
@@ -609,7 +612,10 @@ class DownloaderApp(ctk.CTk):
 
     def analyze_url_async(self, url: str):
         """Start the thread that extracts the video info."""
-        if self.analyzing or self.downloading:
+        if self.downloading:
+            return
+        if self.analyzing:
+            self.pending_url = url
             return
 
         # Clear the previous info widgets and show the status
@@ -634,8 +640,19 @@ class DownloaderApp(ctk.CTk):
 
         threading.Thread(target=analyze_task, daemon=True).start()
 
+    def show_cookie_warning(self):
+        """Tell the user, once, that the browser cookies could not be used."""
+        if self.downloader.cookie_warning_pending:
+            self.downloader.cookie_warning_pending = False
+            messagebox.showwarning(tr("msg_warning_title"), self.downloader.browser_cookie_error)
+
     def on_analysis_complete(self, info: dict | None):
         self.analyzing = False
+        self.after(100, self.show_cookie_warning)
+        if self.pending_url:
+            url, self.pending_url = self.pending_url, None
+            self.analyze_url_async(url)
+            return
         if info:
             # Hide the status label and show the widgets with the video details
             self.info_state = "shown"
@@ -846,6 +863,7 @@ class DownloaderApp(ctk.CTk):
         self.stats_label.configure(text=stats_text)
 
     def on_download_complete(self, success: bool):
+        self.after(100, self.show_cookie_warning)
         """Called on the main thread when the download finishes."""
         self.downloading = False
         self.set_ui_state("normal")

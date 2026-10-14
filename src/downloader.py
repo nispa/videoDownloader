@@ -1,4 +1,7 @@
 import os
+import atexit
+import shutil
+import tempfile
 import subprocess
 import json
 import re
@@ -30,6 +33,28 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+def _discard_file(path: str):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+CHROMIUM_COOKIES_MSG = (
+    "Edge, Chrome e gli altri browser basati su Chromium proteggono i cookie con una "
+    "cifratura (App-Bound Encryption) che yt-dlp non riesce a leggere, nemmeno a "
+    "browser chiuso. Scegli Firefox come browser per i cookie, oppure esporta un file "
+    "cookies.txt con un'estensione del browser (es. \"Get cookies.txt LOCALLY\") e "
+    "selezionalo nelle impostazioni."
+)
+
+
+def _is_browser_cookie_error(output: str) -> bool:
+    """True if yt-dlp failed while reading cookies straight from a browser."""
+    low = (output or "").lower()
+    return ("dpapi" in low or "failed to decrypt" in low or "app-bound" in low
+            or "cookie database" in low or "cookies database" in low)
+
+
 class VideoDownloader:
     def __init__(self):
         # Absolute paths of the local binaries, based on the centralized BASE_DIR
@@ -37,10 +62,17 @@ class VideoDownloader:
         self.tools_dir = os.path.join(base_dir, "tools")
         self.yt_dlp_path = os.path.join(self.tools_dir, "yt-dlp.exe")
         self.ffmpeg_path = os.path.join(self.tools_dir, "ffmpeg.exe")
+        self.deno_path = os.path.join(self.tools_dir, "deno.exe")
 
         # Last human-readable failure, so the GUI can show the actual cause
         # instead of a generic "check the log".
         self.last_error: str | None = None
+
+        # Set when reading cookies from the configured browser failed: the rest of
+        # the session runs without browser cookies (public content keeps working)
+        # and the GUI shows this message once.
+        self.browser_cookie_error: str | None = None
+        self.cookie_warning_pending = False
 
         # Fallback always living next to the app (same drive as the executable,
         # so it survives removable/unmounted drives -> portability).
@@ -77,13 +109,13 @@ class VideoDownloader:
         """
         if not output:
             return None
-        if "DPAPI" in output or ("cookie" in output.lower() and "could not copy" in output.lower()):
+        if "could not copy" in output.lower() and "cookie" in output.lower():
             return (
-                "Non è stato possibile leggere i cookie dal browser: sono cifrati e legati "
-                "all'utente Windows di origine, quindi non sono trasferibili su un altro PC "
-                "o profilo. Imposta 'Nessuno' come browser per i cookie, oppure esporta un "
-                "file cookies.txt e selezionalo nelle impostazioni."
+                "Il database dei cookie del browser è bloccato perché il browser è in "
+                "esecuzione. Chiudilo completamente oppure usa un file cookies.txt."
             )
+        if _is_browser_cookie_error(output):
+            return CHROMIUM_COOKIES_MSG
         if "HTTP Error 429" in output:
             return (
                 "Il sito ha risposto 'Too Many Requests' (429): troppe richieste dallo stesso "
@@ -207,6 +239,12 @@ class VideoDownloader:
         path = database.get_setting("download_path") or self.default_download_dir
         return self._ensure_usable_dir(path)
 
+    def _js_runtime_args(self) -> list[str]:
+        """Point yt-dlp to the Deno downloaded into tools/ (YouTube needs a JS runtime)."""
+        if os.path.isfile(self.deno_path):
+            return ["--js-runtimes", f"deno:{self.deno_path}"]
+        return []
+
     def _get_cookie_args(self) -> list[str]:
         """
         Return the yt-dlp arguments for cookie-based authentication.
@@ -214,11 +252,45 @@ class VideoDownloader:
         """
         cookie_file = database.get_setting("cookie_file")
         if cookie_file and os.path.isfile(cookie_file):
-            return ["--cookies", cookie_file]
+            return ["--cookies", self._cookie_working_copy(cookie_file)]
         cookie_browser = database.get_setting("cookie_browser", "none")
-        if cookie_browser and cookie_browser.lower() != "none":
+        if cookie_browser and cookie_browser.lower() != "none" and not self.browser_cookie_error:
             return ["--cookies-from-browser", cookie_browser.lower()]
         return []
+
+    def _disable_browser_cookies(self, output: str) -> bool:
+        """
+        If `output` is a failure to read the browser cookies, stop using them for
+        the rest of the session and return True so the caller retries without.
+        """
+        cookie_args = self._get_cookie_args()
+        if "--cookies-from-browser" not in cookie_args or not _is_browser_cookie_error(output):
+            return False
+        browser = cookie_args[cookie_args.index("--cookies-from-browser") + 1]
+        self.browser_cookie_error = self._explain_cookie_error(browser, output)
+        self.cookie_warning_pending = True
+        logger.warning(f"Browser cookies ({browser}) unusable, continuing without: {output.strip()}")
+        return True
+
+    @staticmethod
+    def _cookie_working_copy(cookie_file: str) -> str:
+        """
+        Copy cookies.txt to a throwaway file and return its path.
+
+        yt-dlp rewrites the file passed with --cookies when it exits, storing
+        whatever the site sent back. When a site rotates or revokes its session
+        (Instagram, Facebook and Google do), the login tokens are wiped from the
+        user's file for good and every later request runs logged out.
+        """
+        try:
+            fd, copy_path = tempfile.mkstemp(prefix="vdl-cookies-", suffix=".txt")
+            os.close(fd)
+            shutil.copyfile(cookie_file, copy_path)
+        except OSError as e:
+            logger.warning(f"Could not copy the cookie file, using it directly: {e}")
+            return cookie_file
+        atexit.register(_discard_file, copy_path)
+        return copy_path
 
     @staticmethod
     def _explain_cookie_error(browser: str, output: str) -> str:
@@ -226,6 +298,11 @@ class VideoDownloader:
         low = (output or "").lower()
         name = browser.capitalize()
 
+        # Closing a Chromium browser only turns "database locked" into a
+        # decryption failure: say what actually works instead.
+        if browser.lower() in ("edge", "chrome", "opera", "brave", "chromium", "vivaldi") and (
+                "could not copy" in low or "dpapi" in low or "failed to decrypt" in low or "app-bound" in low):
+            return CHROMIUM_COOKIES_MSG
         if "could not copy" in low and "cookie database" in low:
             return (
                 f"Il database dei cookie di {name} è bloccato perché il browser è in "
@@ -237,12 +314,8 @@ class VideoDownloader:
                 f"Non è stato trovato alcun profilo di {name} su questo computer: "
                 f"il browser non è installato oppure usa un profilo diverso da quello predefinito."
             )
-        if "dpapi" in low:
-            return (
-                f"Impossibile decifrare i cookie di {name}: sono protetti da DPAPI e "
-                f"leggibili solo dall'utente Windows che li ha creati. Esegui "
-                f"l'esportazione con lo stesso account Windows con cui usi il browser."
-            )
+        if "dpapi" in low or "failed to decrypt" in low or "app-bound" in low:
+            return CHROMIUM_COOKIES_MSG
         if "unsupported browser" in low:
             return f"{name} non è supportato da yt-dlp per la lettura dei cookie."
         if "permission" in low or "access is denied" in low:
@@ -367,6 +440,7 @@ class VideoDownloader:
             "--no-playlist",
             "--no-warnings",
         ]
+        cmd.extend(self._js_runtime_args())
         cmd.extend(self._get_cookie_args())
         cmd.append(url)
 
@@ -389,6 +463,8 @@ class VideoDownloader:
 
             if process.returncode != 0:
                 logger.error(f"Error while extracting info (code {process.returncode}): {process.stderr}")
+                if self._disable_browser_cookies(process.stderr):
+                    return self.get_info(url)
                 self.last_error = self._explain_yt_dlp_error(process.stderr)
                 return None
 
@@ -515,6 +591,7 @@ class VideoDownloader:
         else:
             logger.warning("FFmpeg non disponibile: i sottotitoli restano nel formato originale (.vtt).")
 
+        cmd.extend(self._js_runtime_args())
         cmd.extend(self._get_cookie_args())
         cmd.append(url)
         logger.info(f"Fetching subtitles ({sub_langs}): {' '.join(cmd)}")
@@ -588,6 +665,7 @@ class VideoDownloader:
             "-o", output_template
         ]
 
+        cmd.extend(self._js_runtime_args())
         cmd.extend(self._get_cookie_args())
 
         has_ffmpeg = self.ffmpeg_available
@@ -712,6 +790,9 @@ class VideoDownloader:
                 return True
             else:
                 logger.error(f"Error during download. Exit code: {process.returncode}")
+                if self._disable_browser_cookies("\n".join(error_lines)):
+                    return self.download(url, mode, progress_callback,
+                                         download_subs, sub_langs, subs_as_txt)
                 self.last_error = self._explain_yt_dlp_error("\n".join(error_lines))
                 if progress_callback:
                     progress_callback(0.0, "---", "--:--", f"Errore (Codice {process.returncode})")

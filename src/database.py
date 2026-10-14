@@ -166,7 +166,7 @@ def init_db() -> bool:
                 logger.warning(f"Could not create the default download folder: {e}")
             cursor.execute(
                 "INSERT INTO settings (key, value) VALUES ('download_path', ?)",
-                (DEFAULT_DOWNLOAD_DIR,)
+                (_path_to_stored(DEFAULT_DOWNLOAD_DIR),)
             )
             conn.commit()
 
@@ -234,6 +234,41 @@ def update_tool_version(tool_name: str, version: str) -> bool:
         conn.close()
 
 
+# Settings holding a filesystem path. Paths inside the application folder are
+# stored relative to it, so the app keeps working after the folder (exe + data)
+# is moved or copied to another computer.
+PATH_SETTINGS = ("cookie_file", "download_path")
+APP_SUBDIRS = ("data", "downloads")
+
+
+def _path_to_stored(value: str) -> str:
+    if not value or not os.path.isabs(value):
+        return value
+    try:
+        rel = os.path.relpath(value, BASE_DIR)
+    except ValueError:  # different drive
+        return value
+    return value if rel.startswith("..") else rel
+
+
+def _path_from_stored(value: str) -> str:
+    if not value:
+        return value
+    if not os.path.isabs(value):
+        return os.path.normpath(os.path.join(BASE_DIR, value))
+    if os.path.exists(value):
+        return value
+    # Absolute path written by an older version, pointing into the folder the
+    # app was moved away from: look for the same file in the current one.
+    parts = os.path.normpath(value).split(os.sep)
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() in APP_SUBDIRS:
+            candidate = os.path.join(BASE_DIR, *parts[i:])
+            logger.info(f"Setting path '{value}' not found, using '{candidate}'.")
+            return candidate
+    return value
+
+
 def get_setting(key: str, default_value: str = None) -> str | None:
     """Return the value of a setting, or the default value."""
     try:
@@ -245,7 +280,14 @@ def get_setting(key: str, default_value: str = None) -> str | None:
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
-        return row[0] if row else default_value
+        if not row:
+            return default_value
+        if key not in PATH_SETTINGS:
+            return row[0]
+        path = _path_from_stored(row[0])
+        if os.path.isabs(row[0]) and _path_to_stored(path) != row[0]:
+            set_setting(key, path)  # store relative / remember the new location
+        return path
     except sqlite3.Error as e:
         logger.error(f"get_setting({key}) failed: {e}")
         return default_value
@@ -255,6 +297,8 @@ def get_setting(key: str, default_value: str = None) -> str | None:
 
 def set_setting(key: str, value: str) -> bool:
     """Save or update a setting."""
+    if key in PATH_SETTINGS:
+        value = _path_to_stored(value)
     try:
         conn = _connect()
     except sqlite3.Error as e:
